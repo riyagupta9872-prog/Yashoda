@@ -682,8 +682,27 @@ function initDashboard() {
     document.getElementById('user-display-name').textContent = userProfile.name;
     document.getElementById('user-role-display').textContent = roleLabel;
     if (isAnyAdmin()) { const ab = document.getElementById('admin-menu-btn'); if(ab) ab.classList.remove('hidden'); }
+
+    // Role-based tab visibility
+    const userTabs  = document.querySelectorAll('.user-tab');
+    const adminTabs = document.querySelectorAll('.admin-tab');
+    if (isAnyAdmin()) {
+        // Admins: show admin tabs only, hide user tabs
+        userTabs.forEach(b => b.classList.add('hidden'));
+        adminTabs.forEach(b => b.classList.remove('hidden'));
+    } else {
+        // Users: show user tabs only, hide admin tabs
+        userTabs.forEach(b => b.classList.remove('hidden'));
+        adminTabs.forEach(b => b.classList.add('hidden'));
+    }
+
     showSection('dashboard');
-    switchTab('sadhana');
+    // Default tab based on role
+    if (isAnyAdmin()) {
+        switchTab('admin-reports');
+    } else {
+        switchTab('sadhana');
+    }
     if (window._initNotifications) window._initNotifications();
     setupDateSelect();
     refreshFormFields();
@@ -693,14 +712,30 @@ function initDashboard() {
 // 6. NAVIGATION
 // ═══════════════════════════════════════════════════════════
 window.switchTab = (t) => {
-    // Hide ALL panels including admin-panel
+    // Hide ALL panels
     ['sadhana-panel','reports-panel','progress-panel','admin-panel'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.remove('active');
     });
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    const panel = document.getElementById(t + '-panel');
-    if (panel) panel.classList.add('active');
+
+    // admin-reports, admin, inactive all use admin-panel with sub-sections
+    if (t === 'admin-reports' || t === 'admin' || t === 'inactive') {
+        const el = document.getElementById('admin-panel');
+        if (el) el.classList.add('active');
+        // Load admin panel data if not yet loaded
+        if (!adminPanelLoaded) { adminPanelLoaded = true; loadAdminPanel(); }
+        const sectionMap = { 'admin-reports': 'reports', 'admin': 'usermgmt', 'inactive': 'inactive' };
+        const btnQuery   = { 'admin-reports': '.drawer-nav-item[onclick*="reports"]',
+                             'admin':         '.drawer-nav-item[onclick*="usermgmt"]',
+                             'inactive':      '.drawer-nav-item[onclick*="inactive"]' };
+        const subBtn = document.querySelector(btnQuery[t]);
+        selectAdminSection(sectionMap[t], subBtn);
+    } else {
+        const panel = document.getElementById(t + '-panel');
+        if (panel) panel.classList.add('active');
+    }
+
     const btn = document.querySelector(`.tab-btn[onclick*="'${t}'"]`);
     if (btn) btn.classList.add('active');
 
@@ -1216,7 +1251,7 @@ window.closeAdminDrawer = () => {
 window.selectAdminSection = (section, btn) => {
     // Switch active nav item
     document.querySelectorAll('.drawer-nav-item').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
+    if (btn) btn.classList.add('active');
     // Switch content panel
     document.querySelectorAll('.admin-sub-panel').forEach(p => { p.classList.remove('active'); p.classList.add('hidden'); });
     const panel = document.getElementById('admin-sub-' + section);
@@ -1226,15 +1261,88 @@ window.selectAdminSection = (section, btn) => {
 };
 
 window.filterAdminUsers = () => {
-    const query    = (document.getElementById('admin-search-input')?.value || '').toLowerCase().trim();
-    const category = document.getElementById('admin-category-filter')?.value || '';
-    const cards    = document.querySelectorAll('#admin-users-list .user-card');
+    const query = (document.getElementById('admin-search-input')?.value || '').toLowerCase().trim();
+    const dept  = document.getElementById('admin-filter-dept')?.value  || '';
+    const level = document.getElementById('admin-filter-level')?.value || '';
+    const team  = document.getElementById('admin-filter-team')?.value  || '';
+    const cards = document.querySelectorAll('#admin-users-list .user-card');
     cards.forEach(card => {
         const name = (card.querySelector('.user-name')?.textContent || '').toLowerCase();
         const meta = (card.querySelector('.user-meta')?.textContent || '');
-        const matchName = !query    || name.includes(query);
-        const matchCat  = !category || meta.includes(category);
-        card.style.display = (matchName && matchCat) ? '' : 'none';
+        const matchName  = !query || name.includes(query);
+        const matchDept  = !dept  || meta.includes(dept);
+        const matchLevel = !level || meta.includes(level);
+        const matchTeam  = !team  || meta.includes(team);
+        card.style.display = (matchName && matchDept && matchLevel && matchTeam) ? '' : 'none';
+    });
+};
+
+window.filterInactiveUsers = () => {
+    const dept  = document.getElementById('inactive-filter-dept')?.value  || '';
+    const level = document.getElementById('inactive-filter-level')?.value || '';
+    const team  = document.getElementById('inactive-filter-team')?.value  || '';
+    const cards = document.querySelectorAll('#admin-inactive-container .inactive-card');
+    cards.forEach(card => {
+        const meta = card.dataset.meta || '';
+        const matchDept  = !dept  || meta.includes(dept);
+        const matchLevel = !level || meta.includes(level);
+        const matchTeam  = !team  || meta.includes(team);
+        card.style.display = (matchDept && matchLevel && matchTeam) ? '' : 'none';
+    });
+};
+
+// Update team dropdown based on selected dept — for all filter bars
+window.updateFilterTeams = (prefix) => {
+    const dept = document.getElementById(prefix + '-filter-dept')?.value || '';
+    const teamSel = document.getElementById(prefix + '-filter-team');
+    if (!teamSel) return;
+
+    // Get teams: if dept selected show that dept's teams, else all teams A-Z
+    let teams;
+    if (dept && DEPT_TEAMS[dept]) {
+        teams = [...DEPT_TEAMS[dept]].filter(t => t !== 'Overall' && t !== 'Other').sort();
+        // Add Overall and Other at end if they exist
+        if (DEPT_TEAMS[dept].includes('Other'))   teams.push('Other');
+        if (DEPT_TEAMS[dept].includes('Overall')) teams.push('Overall');
+    } else {
+        // All teams across all depts, A-Z, deduplicated
+        const all = new Set();
+        Object.values(DEPT_TEAMS).forEach(arr => arr.forEach(t => all.add(t)));
+        teams = [...all].sort();
+    }
+
+    const current = teamSel.value;
+    teamSel.innerHTML = '<option value="">All Teams</option>';
+    teams.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t; opt.textContent = t;
+        if (t === current) opt.selected = true;
+        teamSel.appendChild(opt);
+    });
+
+    // Trigger filter after updating teams
+    const fnMap = {
+        'reports':  'filterReports',
+        'admin':    'filterAdminUsers',
+        'inactive': 'filterInactiveUsers',
+    };
+    if (fnMap[prefix] && window[fnMap[prefix]]) window[fnMap[prefix]]();
+};
+
+window.filterReports = () => {
+    const dept  = document.getElementById('reports-filter-dept')?.value  || '';
+    const level = document.getElementById('reports-filter-level')?.value || '';
+    const team  = document.getElementById('reports-filter-team')?.value  || '';
+    const rows  = document.querySelectorAll('#comp-perf-table tbody tr');
+    rows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        const lvl  = cells[1]?.textContent || '';
+        const dpt  = cells[2]?.textContent || '';
+        const tm   = cells[3]?.textContent || '';
+        const matchDept  = !dept  || dpt.includes(dept);
+        const matchLevel = !level || lvl.includes(level);
+        const matchTeam  = !team  || tm.includes(team);
+        row.style.display = (matchDept && matchLevel && matchTeam) ? '' : 'none';
     });
 };
 async function loadAdminPanel() {
@@ -1254,7 +1362,12 @@ async function loadAdminPanel() {
 
     const usersSnap = await db.collection('users').get();
     const filtered = usersSnap.docs
-        .filter(doc => matchesScope(doc.data()))
+        .filter(doc => {
+            const d = doc.data();
+            // Exclude all admins — only show regular users in reports/management
+            if (d.role === 'superAdmin' || d.role === 'deptAdmin' || d.role === 'teamLeader') return false;
+            return matchesScope(d);
+        })
         .sort((a,b) => (a.data().name||'').localeCompare(b.data().name||''));
 
     // Color helper for percentage cells
@@ -1321,7 +1434,7 @@ async function loadAdminPanel() {
         if (missedDays >= 2) {
             const allDates = Array.from(submittedDates).sort((a,b) => b.localeCompare(a));
             const lastDate = allDates[0] || null;
-            inactiveUsers.push({ id: uDoc.id, name: u.name, level: u.level, lastDate, missedDays });
+            inactiveUsers.push({ id: uDoc.id, name: u.name, level: u.level||'Level-1', dept: u.department||'', team: u.team||'', lastDate, missedDays });
         }
 
         const rowIdx = filtered.indexOf(uDoc);
@@ -1447,12 +1560,12 @@ async function loadAdminPanel() {
                 : 'No entries yet';
             const safe = (u.name||'').replace(/'/g,"\'");
             const dot = u.missedDays >= 4 ? '🔴' : u.missedDays === 3 ? '🟠' : '🟡';
-            return `<div class="inactive-card">
+            return `<div class="inactive-card" data-meta="${u.dept} ${u.team} ${u.level}">
                 <div class="inactive-card-left">
                     <span class="inactive-dot">${dot}</span>
                     <div>
                         <div class="inactive-name">${u.name}</div>
-                        <div class="inactive-meta">${u.level||'Level-1'} · ${lastTxt} · <strong>${u.missedDays} days missed</strong></div>
+                        <div class="inactive-meta">${u.level||'Level-1'} · ${u.dept||'-'} · ${u.team||'-'} · ${lastTxt} · <strong>${u.missedDays} days missed</strong></div>
                     </div>
                 </div>
                 <div class="inactive-actions">
