@@ -749,6 +749,7 @@
 
     </style>
 <script>
+// These are overridden by app.js after load — kept minimal here
 function guideTab(tab) {
     ['intro','form','level1','level2','level3','level4','reports','admin','faq'].forEach(function(t) {
         var p = document.getElementById('gpanel-'+t);
@@ -763,31 +764,30 @@ function guideTab(tab) {
 }
 
 function openUserGuide() {
-    // Open guide and jump to user's current level tab
-    document.getElementById('user-guide-modal').classList.remove('hidden');
-    var level = (window.userProfile && window.userProfile.level) || 'Level-1';
+    var modal = document.getElementById('user-guide-modal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    // Always read fresh from window.userProfile (set by app.js)
+    var level = (window.userProfile && window.userProfile.level) || '';
     var tabMap = {'Level-1':'level1','Level-2':'level2','Level-3':'level3','Level-4':'level4'};
     var tab = tabMap[level] || 'intro';
-    guideTab(tab);
-    // Highlight user's level tab with a glow
-    highlightUserLevelTab(level);
-}
-
-function highlightUserLevelTab(level) {
-    var tabMap = {'Level-1':'level1','Level-2':'level2','Level-3':'level3','Level-4':'level4'};
-    var activeTab = tabMap[level];
+    // Use window.guideTab if app.js has overridden it
+    if (window.guideTab) window.guideTab(tab);
+    else guideTab(tab);
+    // Highlight user level tab
     ['level1','level2','level3','level4'].forEach(function(t) {
         var b = document.getElementById('gtab-'+t);
         if (!b) return;
-        if (t === activeTab) {
-            b.style.outline = '2px solid gold';
-            b.style.outlineOffset = '2px';
-            b.title = 'Your current level';
-        } else {
-            b.style.outline = '';
-            b.title = '';
-        }
+        var isActive = (t === tabMap[level]);
+        b.style.outline = isActive ? '2px solid gold' : '';
+        b.style.outlineOffset = isActive ? '2px' : '';
+        b.title = isActive ? 'Your current level' : '';
     });
+}
+
+function closeUserGuide() {
+    var modal = document.getElementById('user-guide-modal');
+    if (modal) modal.classList.add('hidden');
 }
 </script>
 </head>
@@ -1261,8 +1261,8 @@ function highlightUserLevelTab(level) {
 <!-- ══ MODAL: User Guide ══ -->
 <div id="user-guide-modal" class="modal-overlay hidden">
     <div class="modal-box md guide">
-        <button class="modal-close" onclick="document.getElementById('user-guide-modal').classList.add('hidden')">×</button>
-        <div class="modal-title" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-shrink:0;">📖 Sadhana Tracker — User Guide<a href="Sadhana_Tracker_UserGuide.pdf" download style="font-size:12px;background:#1a237e;color:white;padding:5px 12px;border-radius:20px;text-decoration:none;white-space:nowrap;flex-shrink:0;">⬇ PDF</a></div>
+        <button class="modal-close" onclick="closeUserGuide()">×</button>
+        <div class="modal-title" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-shrink:0;">📖 Sadhana Tracker — User Guide<a href="Narayana-Ashraya-Sadhana_Tracker_UserGuide.pdf" download style="font-size:12px;background:#1a237e;color:white;padding:5px 12px;border-radius:20px;text-decoration:none;white-space:nowrap;flex-shrink:0;">⬇ PDF</a></div>
 
         <!-- Tab Navigation — OUTSIDE scroll so always visible -->
         <div style="display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;margin-bottom:10px;border-bottom:2px solid #e5e7eb;padding-bottom:10px;-webkit-overflow-scrolling:touch;scrollbar-width:none;flex-shrink:0;">
@@ -1565,7 +1565,7 @@ function highlightUserLevelTab(level) {
             <div class="guide-warn-box" style="margin-bottom:12px;">
                 ⚡ <b>Stricter</b> sleep/wake targets<br>
                 ⚡ Instrument is <b>Compulsory</b> (not just bonus)<br>
-                ⚡ Pathan <b>AND</b> Hearing both scored separately<br>
+                ⚡ Pathan &amp; Hearing — <b>Best of Two</b> (Max +25, same as L2)<br>
                 ⚡ Day sleep limit: <b>60 min</b> (was 90)<br>
                 ⚡ Missing Dress/Tilak/Mala on Sunday = <b>−5 penalty</b>
             </div>
