@@ -711,9 +711,12 @@ function closeUserGuide() {
     <section id="auth-section" class="card">
         <h2 style="text-align:center;margin-bottom:4px;color:var(--primary);">🙏 Sadhana Tracker</h2>
         <p style="text-align:center;margin-bottom:20px;font-size:12px;color:#9ca3af;font-style:italic;letter-spacing:0.4px;">Dedicated to Guru and Gauranga</p>
-        <form id="login-form">
-            <input type="email"    id="login-email"    placeholder="Email" required>
-            <input type="password" id="login-password" placeholder="Password" required>
+        <form id="login-form" autocomplete="off">
+            <input type="email"    id="login-email"    placeholder="Email" required autocomplete="username">
+            <div style="position:relative;">
+                <input type="password" id="login-password" placeholder="Password" required autocomplete="current-password" style="padding-right:42px;">
+                <button type="button" onclick="togglePwd('login-password',this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;width:auto;margin:0;font-size:16px;color:#888;">👁</button>
+            </div>
             <button type="submit" class="btn-primary" style="margin-top:10px;">Login</button>
         </form>
         <p style="text-align:center;margin-top:12px;">
@@ -1055,11 +1058,17 @@ function closeUserGuide() {
         <div class="modal-title">🔑 Change Password</div>
         <div class="pwd-field-group">
             <label>New Password</label>
-            <input type="password" id="pwd-new" placeholder="Minimum 6 characters" autocomplete="new-password">
+            <div style="position:relative;">
+                <input type="password" id="pwd-new" placeholder="Minimum 6 characters" autocomplete="new-password" style="padding-right:42px;">
+                <button type="button" onclick="togglePwd('pwd-new',this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;width:auto;margin:0;font-size:16px;color:#888;">👁</button>
+            </div>
         </div>
         <div class="pwd-field-group">
             <label>Confirm New Password</label>
-            <input type="password" id="pwd-confirm" placeholder="Re-enter new password" autocomplete="new-password">
+            <div style="position:relative;">
+                <input type="password" id="pwd-confirm" placeholder="Re-enter new password" autocomplete="new-password" style="padding-right:42px;">
+                <button type="button" onclick="togglePwd('pwd-confirm',this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;width:auto;margin:0;font-size:16px;color:#888;">👁</button>
+            </div>
         </div>
         <button onclick="submitPasswordChange()" class="btn-primary" style="margin-top:6px;">Update Password</button>
         <button onclick="closePasswordModal()" class="btn-gray">Cancel</button>
