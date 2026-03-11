@@ -811,9 +811,10 @@ function closeUserGuide() {
             <button class="tab-btn user-tab"        onclick="switchTab('reports')">My Reports</button>
             <button class="tab-btn user-tab"        onclick="switchTab('progress')">My Progress</button>
             <!-- Admin tabs -->
-            <button class="tab-btn admin-tab hidden" onclick="switchTab('admin-reports')">Reports</button>
-            <button class="tab-btn admin-tab hidden" onclick="switchTab('admin')">User Management</button>
+            <button class="tab-btn admin-tab hidden" onclick="switchTab('admin-reports')">WCR</button>
+            <button class="tab-btn admin-tab hidden" onclick="switchTab('admin')">Individual Reports</button>
             <button class="tab-btn admin-tab hidden" onclick="switchTab('inactive')">Inactive Devotees <span id="inactive-tab-badge" class="inactive-tab-count"></span></button>
+            <button class="tab-btn admin-tab hidden" onclick="switchTab('adminmgmt')">Admin Management</button>
         </div>
 
         <!-- SADHANA ENTRY -->
@@ -955,6 +956,14 @@ function closeUserGuide() {
                             <select id="inactive-filter-team"  onchange="filterInactiveUsers()" style="margin:0;width:auto;flex-shrink:0;padding:8px 10px;font-size:12px;border-radius:8px;border:1px solid #ddd;"><option value="">All Teams</option><option value="Lalita">Lalita</option><option value="Visakha">Visakha</option><option value="Chitralekha">Chitralekha</option><option value="Champakalata">Champakalata</option><option value="Tungavidya">Tungavidya</option><option value="Indulekha">Indulekha</option><option value="Rangadevi">Rangadevi</option><option value="Sudevi">Sudevi</option><option value="Anant">Anant</option><option value="Govind">Govind</option><option value="Madhav">Madhav</option><option value="Keshav">Keshav</option><option value="Rohini">Rohini</option><option value="Rukmini">Rukmini</option><option value="Kalindi">Kalindi</option><option value="Satyabhama">Satyabhama</option><option value="Jamvanti">Jamvanti</option><option value="Lakshmana">Lakshmana</option><option value="Kaushal">Kaushal</option><option value="Bhadra">Bhadra</option><option value="Vasudev">Vasudev</option><option value="Sankarshan">Sankarshan</option><option value="Anirudha">Anirudha</option><option value="Pradyuman">Pradyuman</option><option value="Other">Other</option><option value="Overall">Overall</option></select>
                         </div>
                     <div id="admin-inactive-container"></div>
+                </div>
+
+                <!-- Admin Management -->
+                <div id="admin-sub-adminmgmt" class="admin-sub-panel hidden">
+                    <h3 style="margin:0 0 14px;color:var(--primary);font-size:15px;">&#128272; Admin Management</h3>
+                    <div id="admin-mgmt-list" style="display:flex;flex-direction:column;gap:10px;">
+                        <p style="color:#aaa;text-align:center;padding:20px;">Loading admins…</p>
+                    </div>
                 </div>
             </div>
 
