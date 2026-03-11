@@ -681,7 +681,7 @@ function initDashboard() {
                     : `${userProfile.level||'Level-1'} | ${userProfile.department||''} | ${userProfile.team||''}`;
     document.getElementById('user-display-name').textContent = userProfile.name;
     document.getElementById('user-role-display').textContent = roleLabel;
-    if (isAnyAdmin()) { const ab = document.getElementById('admin-menu-btn'); if(ab) ab.classList.remove('hidden'); }
+
 
     // Role-based tab visibility
     const userTabs  = document.querySelectorAll('.user-tab');
@@ -1240,33 +1240,7 @@ window.filterInactive = (minDays, btn) => {
 };
 
 let adminPanelLoaded = false;
-window.openAdminDrawer = () => {
-    document.getElementById('admin-drawer').classList.add('open');
-    document.getElementById('admin-drawer-overlay').classList.remove('hidden');
-    document.body.style.overflow = 'hidden';
-    // Show admin panel, hide others
-    ['sadhana-panel','reports-panel','progress-panel'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.classList.remove('active');
-    });
-    const ap = document.getElementById('admin-panel');
-    if (ap) ap.classList.add('active');
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    // Ensure reports sub-panel is shown by default
-    document.querySelectorAll('.admin-sub-panel').forEach(p => { p.classList.remove('active'); p.classList.add('hidden'); });
-    const defaultPanel = document.getElementById('admin-sub-reports');
-    if (defaultPanel) { defaultPanel.classList.remove('hidden'); defaultPanel.classList.add('active'); }
-    document.querySelectorAll('.drawer-nav-item').forEach(b => b.classList.remove('active'));
-    const firstNav = document.querySelector('.drawer-nav-item');
-    if (firstNav) firstNav.classList.add('active');
-    if (!adminPanelLoaded) { adminPanelLoaded = true; loadAdminPanel(); }
-};
-
-window.closeAdminDrawer = () => {
-    document.getElementById('admin-drawer').classList.remove('open');
-    document.getElementById('admin-drawer-overlay').classList.add('hidden');
-    document.body.style.overflow = '';
-};
+// Admin drawer removed — using top nav tabs instead
 
 window.selectAdminSection = (section, btn) => {
     // Switch active nav item
@@ -1276,8 +1250,7 @@ window.selectAdminSection = (section, btn) => {
     document.querySelectorAll('.admin-sub-panel').forEach(p => { p.classList.remove('active'); p.classList.add('hidden'); });
     const panel = document.getElementById('admin-sub-' + section);
     if (panel) { panel.classList.remove('hidden'); panel.classList.add('active'); }
-    // Close drawer
-    closeAdminDrawer();
+
 };
 
 window.filterAdminUsers = () => {
@@ -1434,21 +1407,30 @@ async function loadAdminPanel() {
     // Inactive list will be populated inside main user loop below
     // Each entry: { id, name, level, lastDate, missedDays }
     const inactiveUsers = [];
-    const userSadhanaCache = new Map(); // uid → entries array (reuse in comparative table)
+    const userSadhanaCache = new Map();
 
-    for (const uDoc of filtered) {
+    // Fetch sadhana data in batches of 10 — parallel but safe from rate limits
+    const allSadhanaSnaps = [];
+    const BATCH = 10;
+    for (let i = 0; i < filtered.length; i += BATCH) {
+        const batch = filtered.slice(i, i + BATCH);
+        const snaps = await Promise.all(batch.map(uDoc => uDoc.ref.collection('sadhana').get()));
+        allSadhanaSnaps.push(...snaps);
+    }
+
+    for (let idx = 0; idx < filtered.length; idx++) {
+        const uDoc  = filtered[idx];
         const u     = uDoc.data();
-        const sSnap = await uDoc.ref.collection('sadhana').get();
+        const sSnap = allSadhanaSnaps[idx];
         const ents  = sSnap.docs.map(d=>({date:d.id, score:d.data().totalScore||0, sleepTime:d.data().sleepTime||''}));
         userSadhanaCache.set(uDoc.id, ents);
 
-        // Calculate consecutive missing days from yesterday backwards (excl. today)
         const submittedDates = new Set(sSnap.docs.map(d => d.id).filter(d => d >= APP_START));
         let missedDays = 0;
         for (let i = 1; i <= 30; i++) {
             const ds = localDateStr(i);
             if (ds < APP_START) break;
-            if (submittedDates.has(ds)) break; // streak broken
+            if (submittedDates.has(ds)) break;
             missedDays++;
         }
         if (missedDays >= 2) {
@@ -1620,6 +1602,13 @@ async function loadAdminPanel() {
     if (tabBadge) tabBadge.textContent = count4plus > 0 ? count4plus : '';
 
     tableBox.innerHTML = tHtml + '</tbody></table>';
+
+    // Apply filters if already set (handles first-time filter before data loaded)
+    requestAnimationFrame(() => {
+        filterReports();
+        filterAdminUsers();
+        filterInactiveUsers();
+    });
 }
 
 window.handleLevelChange = async (uid, sel) => {
@@ -2265,7 +2254,6 @@ window._sendRoleNotification = async (userId, userName, newRole, category) => {
 window._initNotifications = () => {
     loadUserNotifications();
     checkSadhanaReminder();
-    const adminBtn = document.getElementById('admin-menu-btn');
     if (adminBtn && isAnyAdmin()) adminBtn.classList.remove('hidden');
 };
 
