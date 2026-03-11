@@ -700,12 +700,17 @@ function initDashboard() {
     // Default tab based on role
     if (isAnyAdmin()) {
         switchTab('admin-reports');
+        // Hide notification bell for admins — they don't need sadhana reminders
+        const nb = document.getElementById('sidebar-notif-btn');
+        if (nb) nb.style.display = 'none';
+        const sd = nb && nb.previousElementSibling;
+        if (sd && sd.classList.contains('sidebar-divider')) sd.style.display = 'none';
     } else {
         switchTab('sadhana');
         setupDateSelect();
         refreshFormFields();
     }
-    if (window._initNotifications) window._initNotifications();
+    if (window._initNotifications && !isAnyAdmin()) window._initNotifications();
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -2177,6 +2182,7 @@ function urlBase64ToUint8Array(base64String) {
 
 // ── Request notification permission ──
 window.requestNotificationPermission = async () => {
+    if (isAnyAdmin()) { showToast('Admins do not receive sadhana notifications.', 'warn'); return; }
     if (!('Notification' in window)) {
         alert('This browser does not support notifications.');
         return;
