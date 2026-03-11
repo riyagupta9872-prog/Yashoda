@@ -1,0 +1,1903 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Sadhana Tracker</title>
+    <!-- PWA -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1A3C5E">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Sadhana">
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        :root {
+            --primary: #2c3e50; --secondary: #3498db; --success: #27ae60;
+            --danger: #e74c3c; --warning: #f39c12; --light: #f4f7f6;
+            --white: #ffffff; --border: #e5e7eb; --muted: #6b7280;
+        }
+        * { box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--light); margin: 0; padding: 0; }
+        .container { max-width: 1000px; margin: 0 auto; padding: 16px; }
+        .hidden { display: none !important; }
+        .card { background: var(--white); padding: 22px; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.07); margin-bottom: 18px; }
+
+        /* Inputs */
+        input, select { width: 100%; padding: 11px 13px; margin: 5px 0; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; background: white; }
+        input:focus, select:focus { outline: none; border-color: var(--secondary); box-shadow: 0 0 0 3px rgba(52,152,219,0.1); }
+        .form-label { font-weight: 600; font-size: 13px; color: #444; margin: 10px 0 2px; display: block; }
+
+        /* Buttons */
+        button { width: 100%; padding: 11px; margin: 5px 0; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.18s; }
+        button:hover:not(:disabled) { opacity: 0.87; transform: translateY(-1px); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .btn-primary { background: var(--secondary); color: white; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-danger  { background: var(--danger); color: white; }
+        .btn-gray    { background: #95a5a6; color: white; }
+        .btn-warning { background: #f39c12; color: white; }
+        .btn-purple  { background: #7c3aed; color: white; }
+        .btn-teal    { background: #0d9488; color: white; }
+        .btn-sm      { width: auto !important; padding: 6px 14px !important; font-size: 12px !important; margin: 2px !important; }
+        .btn-admin-header { width: auto; padding: 6px 14px; font-size: 12px; font-weight: 700; margin: 2px;
+            background: #1A3C5E; color: white; border-radius: 8px; white-space: nowrap; border: none; cursor: pointer; }
+        .btn-admin-header:hover { opacity: 0.88; transform: none; }
+        .btn-notif-bell { width: auto; padding: 6px 10px; font-size: 16px; margin: 2px;
+            background: transparent; color: #1A3C5E; border-radius: 8px; border: 1.5px solid #1A3C5E; cursor: pointer; position: relative; }
+        .btn-notif-bell:hover { background: #f0f4f8; transform: none; }
+        .btn-notif-bell.granted { color: #16a34a; border-color: #16a34a; }
+
+        /* ── NEW HEADER ── */
+        .app-header {
+            display: flex; align-items: center; gap: 10px;
+            margin-bottom: 0; padding: 10px 14px;
+            background: white; border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            position: relative;
+        }
+        .header-name { font-weight: 700; font-size: 15px; color: var(--primary); }
+        .header-role { font-size: 12px; color: var(--muted); margin-top: 1px; }
+        .header-btns { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+
+        /* ── HAMBURGER (top-left user menu) ── */
+        .user-menu-btn {
+            width: 38px; height: 38px; min-width: 38px;
+            background: #f0f4f8; border: none; border-radius: 9px;
+            font-size: 18px; cursor: pointer; display: flex;
+            align-items: center; justify-content: center;
+            margin: 0; padding: 0; flex-shrink: 0;
+            color: #1A3C5E; transition: background 0.2s;
+        }
+        .user-menu-btn:hover { background: #dde4ed; transform: none; }
+
+        /* ── ADMIN BTN top-left corner ── */
+        .admin-corner-btn {
+            width: 38px; height: 38px; min-width: 38px;
+            background: #1A3C5E; border: none; border-radius: 9px;
+            font-size: 16px; cursor: pointer; display: flex;
+            align-items: center; justify-content: center;
+            margin: 0; padding: 0; flex-shrink: 0;
+            color: white; transition: background 0.2s;
+        }
+        .admin-corner-btn:hover { background: #2563a0; transform: none; }
+
+        /* ── USER SIDEBAR (left) ── */
+        .user-sidebar {
+            position: fixed; top: 0; left: -300px; width: 280px; height: 100vh;
+            background: white; z-index: 1001;
+            box-shadow: 4px 0 24px rgba(0,0,0,0.15);
+            transition: left 0.28s cubic-bezier(.4,0,.2,1);
+            display: flex; flex-direction: column; overflow-y: auto;
+        }
+        .user-sidebar.open { left: 0; }
+        .user-sidebar-header {
+            background: linear-gradient(135deg, #1A3C5E 0%, #2563a0 100%);
+            padding: 24px 18px 18px; color: white;
+        }
+        .user-sidebar-name { font-size: 16px; font-weight: 700; margin-bottom: 3px; }
+        .user-sidebar-role { font-size: 12px; opacity: 0.8; }
+        .user-sidebar-close {
+            position: absolute; top: 12px; right: 12px;
+            background: rgba(255,255,255,0.2); border: none; border-radius: 6px;
+            color: white; width: 28px; height: 28px; font-size: 16px;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            margin: 0; padding: 0;
+        }
+        .user-sidebar-close:hover { background: rgba(255,255,255,0.35); transform: none; }
+        .sidebar-nav { padding: 10px 0; flex: 1; }
+        .sidebar-item {
+            display: flex; align-items: center; gap: 12px;
+            padding: 13px 20px; cursor: pointer; font-size: 14px;
+            color: #333; transition: background 0.15s; border: none;
+            background: transparent; width: 100%; text-align: left; margin: 0;
+            border-radius: 0;
+        }
+        .sidebar-item:hover { background: #f0f4f8; transform: none; }
+        .sidebar-item-icon { font-size: 18px; width: 24px; text-align: center; flex-shrink: 0; }
+        .sidebar-item-label { font-weight: 500; }
+        .sidebar-item-badge {
+            margin-left: auto; background: #dc2626; color: white;
+            border-radius: 999px; padding: 1px 7px; font-size: 11px; font-weight: 700;
+        }
+        .sidebar-divider { height: 1px; background: #f0f0f0; margin: 6px 16px; }
+        .sidebar-logout {
+            margin: 10px 16px 16px;
+            background: #fee2e2; color: #dc2626; border: none;
+            border-radius: 9px; padding: 11px; font-size: 14px;
+            font-weight: 600; cursor: pointer; width: calc(100% - 32px);
+        }
+        .sidebar-logout:hover { background: #fecaca; transform: none; }
+
+        /* ── SIDEBAR OVERLAY ── */
+        .sidebar-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+            z-index: 1000; opacity: 0; pointer-events: none;
+            transition: opacity 0.28s; backdrop-filter: blur(3px);
+        }
+        .sidebar-overlay.open { opacity: 1; pointer-events: all; }
+
+        /* ── GITA BANNER ── */
+        .gita-banner {
+            position: relative; border-radius: 16px; overflow: hidden;
+            margin-bottom: 16px; min-height: 120px;
+            display: flex; align-items: center;
+            pointer-events: none;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.10);
+        }
+        .gita-banner-bg {
+            position: absolute; inset: 0;
+            background: linear-gradient(135deg, rgba(255,248,230,0.92) 0%, rgba(240,235,255,0.92) 100%);
+            z-index: 1;
+            pointer-events: none;
+        }
+        .gita-banner-img {
+            position: absolute; inset: 0; object-fit: cover;object-position: center 40%;
+            width: 100%; height: 100%; z-index: 0;
+            opacity: 0.90; filter: blur(1.5px);
+            pointer-events: none;
+        }
+        .gita-banner-content {
+            position: relative; z-index: 2; padding: 16px 20px;
+            text-align: center; width: 100%;
+            pointer-events: none;
+        }
+        .gita-shloka {
+            font-size: 13.5px; font-weight: 800; letter-spacing: 0.2px;
+            line-height: 1.7; margin-bottom: 7px;
+            color: #1a1a2e;
+        }
+        .gita-translation {
+            font-size: 12px; line-height: 1.6; color: #2d2d2d;
+            max-width: 600px; margin: 0 auto; font-weight: 500;
+        }
+        .gita-ref {
+            font-size: 11px; color: #7c3aed; margin-top: 6px; font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+
+        /* ── USER GUIDE MODAL ── */
+        .guide-section { margin-bottom: 20px; }
+        .guide-section h3 { font-size: 14px; font-weight: 700; color: #1A3C5E; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 2px solid #e0e7ff; }
+        .guide-row { display: flex; gap: 8px; margin-bottom: 6px; font-size: 13px; }
+        .guide-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+        .score-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+        .score-table th { background: #1A3C5E; color: white; padding: 7px 10px; text-align: left; }
+        .score-table td { padding: 7px 10px; border-bottom: 1px solid #f0f0f0; }
+        .score-table tr:nth-child(even) td { background: #f9fafb; }
+        .score-pos { color: #16a34a; font-weight: 700; }
+        .score-neg { color: #dc2626; font-weight: 700; }
+        .guide-tab { background:#e9ecef;color:#555;padding:6px 12px;border-radius:16px;font-size:12px;font-weight:600;border:none;cursor:pointer;white-space:nowrap;flex-shrink:0; }
+        .guide-tab.active { background:#1a237e;color:#fff; }
+        .guide-panel { display:block; }
+        .guide-panel.hidden { display:none !important; }
+        .guide-level-header { padding:10px 14px;border-radius:10px;margin-bottom:12px;display:flex;align-items:center;flex-wrap:wrap;gap:6px; }
+        .guide-info-box { background:#E8EAF6;border-left:4px solid #1a237e;border-radius:0 8px 8px 0;padding:10px 14px;font-size:12px;color:#333;line-height:1.6; }
+        .guide-warn-box { background:#FFF8E1;border-left:4px solid #F59E0B;border-radius:0 8px 8px 0;padding:10px 14px;font-size:12px;color:#333;line-height:1.7; }
+        .guide-formula-box { background:#1a237e;color:#fff;border-radius:10px;padding:12px 16px;font-size:12px;font-weight:600;text-align:center;margin:8px 0; }
+        .faq-item { margin-bottom:14px;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden; }
+        .faq-q { background:#f0f4ff;padding:9px 14px;font-size:13px;font-weight:700;color:#1a237e; }
+        .faq-a { padding:9px 14px;font-size:12px;color:#444;line-height:1.6; }
+
+        /* Nav tabs */
+        .nav-tabs { display: flex; gap: 7px; margin-bottom: 18px; overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding-bottom: 2px; }
+        .nav-tabs::-webkit-scrollbar { display: none; }
+        .tab-btn { background: #e9ecef; color: #555; padding: 8px 16px; border-radius: 20px; width: auto; font-size: 13px; margin: 0; white-space: nowrap; flex-shrink: 0; }
+        .tab-btn.active { background: var(--secondary); color: white; }
+
+        /* Tab panels */
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+
+        /* Week cards */
+        .week-card { background: white; margin-bottom: 10px; border-radius: 10px; border-left: 4px solid var(--secondary); box-shadow: 0 1px 6px rgba(0,0,0,0.06); overflow: hidden; }
+        .week-header { padding: 13px 16px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: 14px; user-select: none; gap: 10px; flex-wrap: nowrap; }
+        .week-header:hover { background: #f9fafb; }
+        .week-body { padding: 10px 14px; border-top: 1px solid #f0f0f0; overflow-x: auto; overflow-y: auto; max-height: 420px; display: none; }
+        .week-body.open { display: block; }
+
+        /* Tables */
+        .data-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; }
+        .data-table th, .data-table td { border: 1px solid #e0e0e0; padding: 7px 9px; text-align: center; white-space: nowrap; }
+        .data-table th { background: #f8f9fa; font-weight: 600; font-size: 11px;
+            position: sticky; top: 0; z-index: 3; }
+        .data-table td:first-child { text-align: left; font-weight: 500;
+            position: sticky; left: 0; z-index: 2; background: white; }
+        .data-table th:first-child { position: sticky; left: 0; top: 0; z-index: 4; background: #f8f9fa; }
+
+        /* Modals */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.72); display: flex; justify-content: center; align-items: center; z-index: 999; padding: 16px; }
+        .modal-box { background: white; width: 100%; max-width: 900px; padding: 24px; border-radius: 14px; max-height: 92vh; overflow-y: auto; position: relative; }
+        .modal-box.sm  { max-width: 420px; }
+        .modal-box.md  { max-width: 540px; }
+        .modal-close { position: absolute; right: 16px; top: 12px; font-size: 24px; cursor: pointer; color: #aaa; background: none; border: none; width: auto; padding: 4px 8px; margin: 0; line-height: 1; }
+        .modal-close:hover { color: #333; transform: none; }
+        .modal-title { font-size: 17px; font-weight: 700; color: var(--primary); margin: 0 0 18px; padding-right: 30px; }
+
+        /* Admin user cards */
+        .user-card { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 8px; background: white; }
+        .user-card-top { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-bottom: 4px; }
+        .user-name  { font-weight: 700; font-size: 15px; }
+        .user-meta  { font-size: 12px; color: var(--muted); margin-top: 3px; }
+        .user-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+        .role-badge { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: 11px; font-weight: 600; margin-left: 6px; vertical-align: middle; }
+
+        /* Info banner */
+        .info-banner { padding: 9px 14px; border-radius: 8px; margin-bottom: 12px; font-size: 13px; }
+        .banner-purple { background: #f3e8ff; color: #6d28d9; }
+        .banner-blue   { background: #eff6ff; color: #1d4ed8; }
+
+        /* Chart */
+        .chart-tabs { display: flex; gap: 7px; margin-bottom: 16px; flex-wrap: wrap; }
+        .chart-tab-btn { background: #e9ecef; color: #555; padding: 7px 16px; border-radius: 20px; width: auto; font-size: 13px; margin: 0; }
+        .chart-tab-btn.active { background: var(--secondary); color: white; }
+        .chart-container { position: relative; height: 260px; }
+
+        /* Password modal */
+        .pwd-field-group { margin-bottom: 14px; }
+        .pwd-field-group label { font-weight: 600; font-size: 13px; color: #444; display: block; margin-bottom: 4px; }
+
+        /* Section divider in profile */
+        hr.section-hr { border: none; border-top: 1px dashed #e0e0e0; margin: 20px 0; }
+
+        /* ── REPORTS PANEL — bigger font ── */
+        #weekly-reports-container .data-table,
+        #modal-report-container .data-table {
+            font-size: 13px;
+        }
+        #weekly-reports-container .data-table th,
+        #modal-report-container .data-table th {
+            font-size: 12px;
+            padding: 8px 10px;
+        }
+        #weekly-reports-container .data-table td,
+        #modal-report-container .data-table td {
+            padding: 8px 10px;
+        }
+        .week-header {
+            font-size: 14px;
+            padding: 13px 16px;
+        }
+
+        /* ── COMPARATIVE PERFORMANCE TABLE ── */
+        .comp-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            font-size: 14px;
+        }
+        .comp-th {
+            position: sticky;
+            top: 0;
+            z-index: 3;
+            background: #1A3C5E;
+            color: white;
+            font-weight: 700;
+            font-size: 12px;
+            padding: 10px 12px;
+            text-align: center;
+            border-bottom: 2px solid #2563a0;
+            white-space: nowrap;
+        }
+        .comp-th-name {
+            text-align: left;
+            min-width: 140px;
+            position: sticky;
+            left: 0;
+            z-index: 5;
+            background: #1A3C5E;
+        }
+        .comp-td {
+            padding: 9px 12px;
+            border-bottom: 1px solid #e5e7eb;
+            text-align: center;
+            white-space: nowrap;
+            font-size: 13px;
+        }
+        .comp-name {
+            text-align: left;
+            font-weight: 700;
+            font-size: 14px;
+            position: sticky;
+            left: 0;
+            z-index: 2;
+            background: white;
+        }
+        .comp-meta {
+            font-size: 12px;
+            color: #6b7280;
+            text-align: left;
+        }
+        .comp-pct {
+            font-size: 14px;
+            min-width: 80px;
+        }
+
+        /* ── EDIT HISTORY MODAL — rich HTML styling ── */
+        .eh-entry {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            margin-bottom: 14px;
+            overflow: hidden;
+        }
+        .eh-header {
+            background: #1A3C5E;
+            color: white;
+            padding: 9px 14px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        .eh-who  { color: #93c5fd; }
+        .eh-when { color: #d1d5db; font-size: 12px; }
+        .eh-reason {
+            background: #f8fafc;
+            padding: 7px 14px;
+            font-size: 12px;
+            color: #6b7280;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .eh-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        .eh-table th {
+            background: #f1f5f9;
+            padding: 7px 12px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 12px;
+            color: #374151;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .eh-table td { padding: 7px 12px; border-bottom: 1px solid #f0f0f0; }
+        .eh-field  { font-weight: 600; color: #374151; width: 35%; }
+        .eh-before { color: #b91c1c; background: #fff5f5; }
+        .eh-after  { color: #15803d; background: #f0fdf4; font-weight: 600; }
+        .eh-nochange {
+            padding: 10px 14px;
+            font-size: 12px;
+            color: #9ca3af;
+            font-style: italic;
+        }
+        /* Edit history modal content area — scrollable, no monospace */
+        #edit-history-content {
+            font-family: inherit;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .admin-menu-float { display: none; }
+
+        /* ── ADMIN DRAWER ── */
+        .drawer-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            backdrop-filter: blur(2px);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .drawer-overlay:not(.hidden) {
+            pointer-events: all;
+            opacity: 1;
+        }
+
+        .admin-drawer {
+            position: fixed;
+            top: 0;
+            left: -280px;
+            width: 260px;
+            height: 100vh;
+            background: #1A3C5E;
+            z-index: 1001;
+            transition: left 0.28s cubic-bezier(0.4,0,0.2,1);
+            box-shadow: 4px 0 24px rgba(0,0,0,0.25);
+            display: flex;
+            flex-direction: column;
+        }
+        .admin-drawer.open { left: 0; }
+
+        .drawer-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 18px 16px;
+            border-bottom: 1px solid rgba(255,255,255,0.12);
+            color: white;
+            font-weight: 700;
+            font-size: 15px;
+        }
+        .drawer-close {
+            background: none;
+            border: none;
+            color: rgba(255,255,255,0.7);
+            font-size: 18px;
+            width: auto;
+            padding: 4px 8px;
+            margin: 0;
+            cursor: pointer;
+        }
+        .drawer-close:hover { color: white; transform: none; opacity: 1; }
+
+        .drawer-nav {
+            padding: 12px 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .drawer-nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 13px 14px;
+            border-radius: 10px;
+            background: transparent;
+            color: rgba(255,255,255,0.75);
+            font-size: 14px;
+            font-weight: 600;
+            text-align: left;
+            width: 100%;
+            margin: 0;
+            transition: all 0.15s;
+            border: none;
+            cursor: pointer;
+        }
+        .drawer-nav-item:hover { background: rgba(255,255,255,0.1); color: white; transform: none; }
+        .drawer-nav-item.active { background: rgba(255,255,255,0.18); color: white; }
+        .drawer-icon { font-size: 18px; flex-shrink: 0; }
+
+        .admin-sub-panel { display: none; }
+        .admin-sub-panel.active { display: block; }
+
+        .inactive-tab-count {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: #dc2626;
+            color: white;
+            border-radius: 999px;
+            min-width: 20px;
+            height: 20px;
+            padding: 0 6px;
+            font-size: 11px;
+            font-weight: 700;
+            margin-left: auto;
+        }
+        .inactive-tab-count:empty { display: none; }
+
+        /* ── ADMIN SEARCH BAR ── */
+        .admin-search-bar {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+        }
+
+        /* ── INACTIVE FILTER BUTTONS ── */
+        .inactive-filter-bar {
+            display: flex;
+            gap: 8px;
+            padding: 12px 16px;
+            background: #fff7ed;
+            border-bottom: 1px solid #fca5a5;
+            flex-wrap: nowrap;
+        }
+        .inactive-filter-btn {
+            flex: 1;
+            padding: 7px 10px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            background: #f1f5f9;
+            color: #555;
+            border: none;
+            cursor: pointer;
+            width: auto;
+            margin: 0;
+            transition: all 0.15s;
+        }
+        .inactive-filter-btn:hover { background: #e2e8f0; transform: none; }
+        .inactive-filter-btn.active { background: #b91c1c; color: white; }
+
+        /* ── INACTIVE DEVOTEES SECTION ── */
+        .admin-tabs {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 16px;
+            background: white;
+            padding: 8px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            overflow-x: auto;
+            flex-wrap: nowrap;
+            scrollbar-width: none;
+        }
+        .admin-tabs::-webkit-scrollbar { display: none; }
+        .admin-tab-item {
+            flex-shrink: 0;
+            background: #f1f5f9;
+            color: #555;
+            border: none;
+            padding: 9px 18px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.18s;
+            width: auto;
+            margin: 0;
+            white-space: nowrap;
+        }
+        .admin-tab-item:hover:not(.active) { background: #e2e8f0; transform: none; }
+        .admin-tab-item.active { background: #1A3C5E; color: white; }
+        .admin-sub-panel { display: none; }
+        .admin-sub-panel.active { display: block; }
+        .inactive-tab-count {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: #dc2626;
+            color: white;
+            border-radius: 999px;
+            min-width: 18px;
+            height: 18px;
+            padding: 0 5px;
+            font-size: 11px;
+            font-weight: 700;
+            margin-left: 5px;
+            vertical-align: middle;
+        }
+        .inactive-tab-count:empty { display: none; }
+
+        /* ── ADMIN SEARCH BAR ── */
+        .admin-search-bar {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+        }
+
+        /* ── INACTIVE FILTER BUTTONS ── */
+        .inactive-filter-bar {
+            display: flex;
+            gap: 8px;
+            padding: 12px 16px;
+            background: #fff7ed;
+            border-bottom: 1px solid #fca5a5;
+            flex-wrap: nowrap;
+        }
+        .inactive-filter-btn {
+            flex: 1;
+            padding: 7px 10px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            background: #f1f5f9;
+            color: #555;
+            border: none;
+            cursor: pointer;
+            width: auto;
+            margin: 0;
+            transition: all 0.15s;
+        }
+        .inactive-filter-btn:hover { background: #e2e8f0; transform: none; }
+        .inactive-filter-btn.active { background: #b91c1c; color: white; }
+
+        /* ── INACTIVE DEVOTEES SECTION ── */
+        .inactive-section {
+            border: 1px solid #fca5a5;
+            border-radius: 10px;
+            margin-bottom: 16px;
+            overflow: hidden;
+            background: white;
+        }
+        .inactive-header {
+            padding: 12px 16px;
+            background: #fff7ed;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 700;
+            font-size: 14px;
+            color: #b91c1c;
+            user-select: none;
+            border-bottom: 1px solid #fca5a5;
+        }
+        .inactive-header:hover { background: #fff1e0; }
+        .inactive-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: #dc2626;
+            color: white;
+            border-radius: 999px;
+            min-width: 22px;
+            height: 22px;
+            padding: 0 7px;
+            font-size: 12px;
+            font-weight: 700;
+            margin-left: 7px;
+            vertical-align: middle;
+        }
+        .inactive-badge-zero {
+            background: #16a34a;
+        }
+        .inactive-arrow {
+            font-size: 11px;
+            color: #b91c1c;
+            transition: transform 0.2s;
+        }
+        .inactive-section.open .inactive-arrow {
+            transform: rotate(180deg);
+        }
+        .inactive-body {
+            display: block;
+            padding: 8px 0;
+        }
+        .inactive-empty {
+            padding: 14px 16px;
+            color: #16a34a;
+            font-size: 13px;
+            font-weight: 600;
+            text-align: center;
+        }
+        .inactive-card {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 16px;
+            border-bottom: 1px solid #f3f4f6;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .inactive-card:last-child { border-bottom: none; }
+        .inactive-card-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .inactive-dot { font-size: 13px; }
+        .inactive-name {
+            font-weight: 700;
+            font-size: 14px;
+            color: #1a252f;
+        }
+        .inactive-meta {
+            font-size: 12px;
+            color: #6b7280;
+            margin-top: 2px;
+        }
+        .inactive-actions {
+            display: flex;
+            gap: 6px;
+        }
+
+        /* Sticky first column — shadow separator */
+        .data-table tr td:first-child {
+            background: inherit;
+            box-shadow: 3px 0 6px rgba(0,0,0,0.12);
+            clip-path: inset(0px -8px 0px 0px);
+        }
+        .data-table thead th:first-child {
+            background: #f8f9fa;
+            box-shadow: 3px 0 6px rgba(0,0,0,0.15);
+            clip-path: inset(0px -8px 0px 0px);
+        }
+
+        /* ── EDIT BUTTON in table rows ── */
+        .btn-edit-cell {
+            width: auto !important; padding: 3px 9px !important; font-size: 11px !important;
+            margin: 0 !important; background: #f39c12 !important; color: white !important;
+            border-radius: 5px !important; font-weight: 600 !important;
+        }
+        .btn-edit-cell:hover { background: #d68910 !important; }
+
+        /* ── EDITED BADGE (✏️ indicator) ── */
+        .edited-badge {
+            display: inline-block; cursor: pointer; font-size: 11px;
+            margin-left: 4px; vertical-align: middle;
+            opacity: 0.75; transition: opacity 0.15s;
+        }
+        .edited-badge:hover { opacity: 1; }
+
+        /* ── EDIT SADHANA MODAL fields ── */
+        .edit-field-group { margin-bottom: 12px; }
+        .edit-field-group label { font-weight: 600; font-size: 13px; color: #444; display: block; margin-bottom: 3px; }
+        .edit-field-group input { margin: 0; }
+        .edit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .edit-score-preview {
+            text-align: center; font-size: 15px; font-weight: 700;
+            padding: 10px; border-radius: 8px; background: #f8f9fa;
+            margin: 14px 0; color: #27ae60;
+        }
+        .edit-reason-group { margin: 12px 0; }
+        .edit-reason-group label { font-weight: 600; font-size: 13px; color: #444; display: block; margin-bottom: 4px; }
+        .edit-reason-group textarea {
+            width: 100%; padding: 9px 12px; border: 1px solid #ddd; border-radius: 8px;
+            font-size: 13px; resize: vertical; min-height: 60px; font-family: inherit;
+        }
+
+    </style>
+<script>
+function guideTab(tab) {
+    ['intro','form','level1','level2','level3','level4','reports','admin','faq'].forEach(function(t) {
+        var p = document.getElementById('gpanel-'+t);
+        var b = document.getElementById('gtab-'+t);
+        if (p) p.classList.add('hidden');
+        if (b) b.classList.remove('active');
+    });
+    var panel = document.getElementById('gpanel-'+tab);
+    var btn   = document.getElementById('gtab-'+tab);
+    if (panel) panel.classList.remove('hidden');
+    if (btn)   btn.classList.add('active');
+}
+
+function openUserGuide() {
+    // Open guide and jump to user's current level tab
+    document.getElementById('user-guide-modal').classList.remove('hidden');
+    var level = (window.userProfile && window.userProfile.level) || 'Level-1';
+    var tabMap = {'Level-1':'level1','Level-2':'level2','Level-3':'level3','Level-4':'level4'};
+    var tab = tabMap[level] || 'intro';
+    guideTab(tab);
+    // Highlight user's level tab with a glow
+    highlightUserLevelTab(level);
+}
+
+function highlightUserLevelTab(level) {
+    var tabMap = {'Level-1':'level1','Level-2':'level2','Level-3':'level3','Level-4':'level4'};
+    var activeTab = tabMap[level];
+    ['level1','level2','level3','level4'].forEach(function(t) {
+        var b = document.getElementById('gtab-'+t);
+        if (!b) return;
+        if (t === activeTab) {
+            b.style.outline = '2px solid gold';
+            b.style.outlineOffset = '2px';
+            b.title = 'Your current level';
+        } else {
+            b.style.outline = '';
+            b.title = '';
+        }
+    });
+}
+</script>
+</head>
+<body>
+<div class="container">
+
+    <!-- ══ AUTH ══ -->
+    <section id="auth-section" class="card">
+        <h2 style="text-align:center;margin-bottom:4px;color:var(--primary);">🙏 Sadhana Tracker</h2>
+        <p style="text-align:center;margin-bottom:20px;font-size:12px;color:#9ca3af;font-style:italic;letter-spacing:0.4px;">Dedicated to Guru and Gauranga</p>
+        <form id="login-form">
+            <input type="email"    id="login-email"    placeholder="Email" required>
+            <input type="password" id="login-password" placeholder="Password" required>
+            <button type="submit" class="btn-primary" style="margin-top:10px;">Login</button>
+        </form>
+        <p style="text-align:center;margin-top:12px;">
+            <a href="#" onclick="openForgotPassword(event)" style="color:var(--secondary);font-size:13px;text-decoration:none;">Forgot Password?</a>
+        </p>
+        <p style="text-align:center;margin-top:14px;font-size:13px;color:var(--muted);">
+            New here? <a href="signup.html" style="color:var(--secondary);font-weight:600;">Sign Up</a>
+        </p>
+    </section>
+
+    <!-- ══ PROFILE SETUP ══ -->
+    <section id="profile-section" class="card hidden">
+        <h2 id="profile-title" style="color:var(--primary);margin-bottom:4px;">Complete Your Profile</h2>
+        <p id="profile-subtitle" style="color:var(--muted);font-size:13px;margin-bottom:20px;">Tell us about yourself to get started</p>
+        <form id="profile-form">
+            <label class="form-label">Full Name</label>
+            <input type="text" id="profile-name" placeholder="Full Name" required>
+
+              <label class="form-label">Chanting Category</label>
+            <select id="profile-chanting" required>
+                <option value="" disabled selected>Select chanting category</option>
+                <option value="0-4 rounds">0-4 Rounds</option>
+                <option value="4-8 rounds">4-8 Rounds</option>
+                <option value="8-16 rounds">8-16 Rounds</option>
+                <option value="16+ rounds">16+ Rounds</option>
+            </select>
+
+            <label class="form-label">Current Exact Rounds</label>
+            <input type="number" id="profile-exact-rounds" placeholder="e.g. 12" required>
+
+            <!-- Level admin set karega — hidden from user -->
+            <!-- Instrument / Activity -->
+            <label class="form-label" id="instrument-label">Instrument / Activity <span style="color:#aaa;font-weight:400;font-size:12px;">(optional)</span></label>
+            <select id="profile-instrument" required>
+                <option value="" disabled selected>Select your instrument / activity</option>
+                <!-- Options populated by JS based on level -->
+            </select>
+
+            <label class="form-label">Department</label>
+            <select id="profile-dept" required onchange="populateDeptTeams('profile-team', this.value)">
+                <option value="" disabled selected>Select department</option>
+                <option value="IGF">IGF</option>
+                <option value="IYF">IYF</option>
+                <option value="ICF_MTG">ICF_MTG</option>
+                <option value="ICF_PRJI">ICF_PRJI</option>
+            </select>
+
+            <label class="form-label">Team</label>
+            <select id="profile-team" required>
+                <option value="" disabled selected>Select team (choose dept first)</option>
+            </select>
+
+            <button type="submit" class="btn-success" style="margin-top:16px;">Save &amp; Continue</button>
+            <button type="button" onclick="showSection('dashboard')" id="cancel-edit" class="btn-gray hidden">Cancel</button>
+        </form>
+    </section>
+
+    <!-- ══ DASHBOARD ══ -->
+    <section id="dashboard-section" class="hidden">
+
+
+
+        <!-- ── APP HEADER ── -->
+        <div class="app-header" style="margin-bottom:12px;">
+            <!-- Left: user hamburger + admin btn -->
+            <div style="display:flex;gap:7px;align-items:center;">
+                <button class="user-menu-btn" onclick="openUserSidebar()" title="Menu">&#9776;</button>
+                <button id="admin-menu-btn" class="admin-corner-btn hidden" onclick="openAdminDrawer()" title="Admin Panel">&#9881;</button>
+            </div>
+            <!-- Center: name + role -->
+            <div style="flex:1;padding:0 10px;">
+                <div class="header-name" id="user-display-name"></div>
+                <div class="header-role" id="user-role-display"></div>
+            </div>
+            <!-- Right: logout only -->
+            <button id="logout-btn" class="btn-danger btn-sm">Logout</button>
+        </div>
+
+        <!-- ── GITA BANNER ── -->
+        <div class="gita-banner" style="margin-bottom:14px;justify-content:center;">
+            <div class="gita-banner-bg"></div>
+            <!-- Replace src below with your image URL -->
+            <img class="gita-banner-img" src="banner.png" alt="" id="banner-bg-img" onerror="this.style.display='none'">
+            <div class="gita-banner-content">
+                <div class="gita-shloka">युक्ताहारविहारस्य युक्तचेष्टस्य कर्मसु ।<br>युक्तस्वप्‍नावबोधस्य योगो भवति दु:खहा</div>
+                <div class="gita-translation">जो व्यक्ति अपने खान-पान, सोने, मनोरंजन और काम करने की आदतों में संयम बरतता है, वह योग प्रणाली का अभ्यास करके सभी भौतिक कष्टों को कम कर सकता है।</div>
+                <div class="gita-ref">— Bhagavad Gita 6.17</div>
+            </div>
+        </div>
+
+        <!-- ── NAV TABS ── -->
+        <div class="nav-tabs" style="margin-bottom:16px;">
+            <button class="tab-btn active" onclick="switchTab('sadhana')">Daily Entry</button>
+            <button class="tab-btn"        onclick="switchTab('reports')">My Reports</button>
+            <button class="tab-btn"        onclick="switchTab('progress')">My Progress</button>
+        </div>
+
+        <!-- SADHANA ENTRY -->
+        <div id="sadhana-panel" class="tab-panel active">
+            <div class="card">
+                <form id="sadhana-form">
+                    <label class="form-label">Date</label>
+                    <select id="sadhana-date" required></select>
+
+                    <label class="form-label">Bed Time (Previous Night)</label>
+                    <input type="time" id="sleep-time" required>
+
+                    <label class="form-label">Wake Up Time</label>
+                    <input type="time" id="wakeup-time" required>
+
+                    <label class="form-label">Chanting Completed By</label>
+                    <input type="time" id="chanting-time" required>
+
+                    <label class="form-label">📖 Pathan (Reading) — Minutes</label>
+                    <input type="number" id="reading-mins" value="0" min="0" required>
+
+                    <label class="form-label">🎧 Hearing (Shravan) — Minutes</label>
+                    <input type="number" id="hearing-mins" value="0" min="0" required>
+
+                    <!-- Instrument — label auto-updates from profile -->
+                    <div id="instrument-area">
+                        <label class="form-label" id="instrument-form-label">🎵 Instrument — Minutes</label>
+                        <input type="number" id="instrument-mins" value="0" min="0">
+                    </div>
+
+                    <!-- Service — all levels, daily minutes + optional text -->
+                    <div id="service-area">
+                        <label class="form-label">🛠️ Service (Seva) — Minutes</label>
+                        <input type="number" id="service-mins" value="0" min="0">
+                        <input type="text" id="service-text" placeholder="Aaj kya seva ki? (optional — sirf Excel mein aayega)" style="margin-top:5px;font-size:13px;color:#555;">
+                    </div>
+
+                    <!-- Notes Revision — L4 only -->
+                    <div id="notes-area" class="hidden">
+                        <label class="form-label">📝 Notes Revision — Minutes</label>
+                        <input type="number" id="notes-mins" value="0" min="0">
+                    </div>
+
+                    <label class="form-label">😴 Day Sleep — Minutes</label>
+                    <input type="number" id="day-sleep-minutes" value="0" required>
+
+                    <!-- Sunday Bonus — shown only on Sunday -->
+                    <div id="sunday-bonus-area" class="hidden">
+                        <div style="background:#fef3c7;border-radius:10px;padding:12px 14px;margin-top:10px;">
+                            <div style="font-weight:700;font-size:13px;color:#92400e;margin-bottom:10px;">🌟 Sunday Bonus</div>
+                            <div id="dress-fields">
+                                <!-- Populated by JS based on dept -->
+                            </div>
+                            <label class="form-label">🔱 Tilak</label>
+                            <select id="tilak-field">
+                                <option value="yes">Yes ✅</option>
+                                <option value="no">No ❌</option>
+                            </select>
+                            <label class="form-label">📿 Mala</label>
+                            <select id="mala-field">
+                                <option value="yes">Yes ✅</option>
+                                <option value="no">No ❌</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn-success" style="margin-top:16px;">Submit Sadhana</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- MY REPORTS -->
+        <div id="reports-panel" class="tab-panel">
+            <div style="margin-bottom:14px;">
+                <button onclick="downloadUserExcel(currentUser.uid, userProfile.name)" class="btn-success btn-sm" style="width:auto;padding:9px 20px;">
+                    Download My History (Excel)
+                </button>
+            </div>
+            <div id="weekly-reports-container"></div>
+        </div>
+
+        <!-- MY PROGRESS CHARTS -->
+        <div id="progress-panel" class="tab-panel">
+            <div class="card">
+                <h3 style="margin:0 0 14px;color:var(--primary);font-size:16px;">My Progress</h3>
+                <div class="chart-tabs">
+                    <button class="chart-tab-btn active" onclick="setChartView('daily', this)">Daily</button>
+                    <button class="chart-tab-btn"        onclick="setChartView('weekly', this)">Weekly</button>
+                    <button class="chart-tab-btn"        onclick="setChartView('monthly', this)">Monthly</button>
+                </div>
+                <div class="chart-container"><canvas id="my-progress-chart"></canvas></div>
+                <p style="font-size:11px;color:var(--muted);text-align:center;margin-top:8px;">Daily max: 160 · Weekly max: 1120</p>
+            </div>
+        </div>
+
+        <!-- ADMIN PANEL -->
+        <div id="admin-panel" class="tab-panel">
+
+            <!-- Content area -->
+            <div id="admin-content-area">
+                <!-- Default: Reports -->
+                <div id="admin-sub-reports" class="admin-sub-panel hidden">
+                    <div style="margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+                        <h3 style="margin:0;color:var(--primary);font-size:15px;">&#128202; 4-Week Performance (%)</h3>
+                        <button onclick="downloadMasterReport()" class="btn-success btn-sm" style="width:auto;padding:8px 18px;">&#11015; Master Excel</button>
+                    </div>
+                    <div class="card" style="overflow-x:auto;overflow-y:auto;max-height:70vh;">
+                        <div id="admin-comparative-reports-container"></div>
+                    </div>
+                </div>
+
+                <!-- User Management -->
+                <div id="admin-sub-usermgmt" class="admin-sub-panel hidden">
+                    <h3 style="margin:0 0 14px;color:var(--primary);font-size:15px;">&#128101; User Management</h3>
+                    <div class="card">
+                        <div class="admin-search-bar">
+                            <input type="text" id="admin-search-input" placeholder="Search devotee by name..." oninput="filterAdminUsers()" style="margin:0;flex:1;">
+                            <select id="admin-category-filter" onchange="filterAdminUsers()" style="margin:0;width:auto;flex-shrink:0;padding:10px 12px;font-size:13px;">
+                                <option value="">All Depts</option>
+                                <option value="IGF">IGF</option>
+                                <option value="IYF">IYF</option>
+                                <option value="ICF_MTG">ICF_MTG</option>
+                                <option value="ICF_PRJI">ICF_PRJI</option>
+                            </select>
+                        </div>
+                        <div id="admin-users-list"></div>
+                    </div>
+                </div>
+
+                <!-- Inactive Devotees -->
+                <div id="admin-sub-inactive" class="admin-sub-panel hidden">
+                    <h3 style="margin:0 0 14px;color:var(--primary);font-size:15px;">&#9888; Inactive Devotees</h3>
+                    <div id="admin-inactive-container"></div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Drawer Overlay -->
+        <div id="admin-drawer-overlay" class="drawer-overlay hidden" onclick="closeAdminDrawer()"></div>
+
+        <!-- Left Drawer -->
+        <div id="admin-drawer" class="admin-drawer">
+            <div class="drawer-header">
+                <span>&#128272; Admin Menu</span>
+                <button onclick="closeAdminDrawer()" class="drawer-close">&#10005;</button>
+            </div>
+            <nav class="drawer-nav">
+                <button class="drawer-nav-item active" onclick="selectAdminSection('reports', this)">
+                    <span class="drawer-icon">&#128202;</span>
+                    <span>Reports</span>
+                </button>
+                <button class="drawer-nav-item" onclick="selectAdminSection('usermgmt', this)">
+                    <span class="drawer-icon">&#128101;</span>
+                    <span>User Management</span>
+                </button>
+                <button class="drawer-nav-item" onclick="selectAdminSection('inactive', this)">
+                    <span class="drawer-icon">&#9888;&#65039;</span>
+                    <span>Inactive Devotees</span>
+                    <span id="inactive-tab-badge" class="inactive-tab-count"></span>
+                </button>
+            </nav>
+        </div>
+
+    </section>
+</div>
+
+<!-- ── USER SIDEBAR moved to body level ── -->
+        <div id="user-sidebar" class="user-sidebar">
+            <div class="user-sidebar-header">
+                <button class="user-sidebar-close" onclick="closeUserSidebar()">&#10005;</button>
+                <div class="user-sidebar-name" id="sidebar-user-name">—</div>
+                <div class="user-sidebar-role" id="sidebar-user-role">—</div>
+            </div>
+            <div class="sidebar-nav">
+                <button class="sidebar-item" onclick="closeUserSidebar(); openProfileEdit();">
+                    <span class="sidebar-item-icon">&#9999;&#65039;</span>
+                    <span class="sidebar-item-label">Edit Profile</span>
+                </button>
+                <button class="sidebar-item" onclick="closeUserSidebar(); openPasswordModal();">
+                    <span class="sidebar-item-icon">&#128273;</span>
+                    <span class="sidebar-item-label">Change Password</span>
+                </button>
+                <button class="sidebar-item" onclick="closeUserSidebar(); openNotificationsPanel();">
+                    <span class="sidebar-item-icon">&#128276;</span>
+                    <span class="sidebar-item-label">Notifications</span>
+                    <span class="sidebar-item-badge hidden" id="sidebar-notif-badge">0</span>
+                </button>
+                <div class="sidebar-divider"></div>
+                <button class="sidebar-item" onclick="closeUserSidebar(); openUserGuide();">
+                    <span class="sidebar-item-icon">&#128214;</span>
+                    <span class="sidebar-item-label">User Guide</span>
+                </button>
+                <button class="sidebar-item" onclick="closeUserSidebar(); openAbout();">
+                    <span class="sidebar-item-icon">&#8505;&#65039;</span>
+                    <span class="sidebar-item-label">About</span>
+                </button>
+                <div class="sidebar-divider"></div>
+                <button class="sidebar-item" onclick="closeUserSidebar(); requestNotificationPermission();">
+                    <span class="sidebar-item-icon" id="sidebar-bell-icon">&#128276;</span>
+                    <span class="sidebar-item-label" id="sidebar-bell-label">Enable Notifications</span>
+                </button>
+            </div>
+            <button class="sidebar-logout" onclick="document.getElementById('logout-btn').click()">
+                &#128682; Logout
+            </button>
+        </div>
+
+<!-- ── SIDEBAR OVERLAY (body level) ── -->
+<div id="sidebar-overlay" class="sidebar-overlay" onclick="closeUserSidebar()"></div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!-- MODAL: User History                                    -->
+<!-- ══════════════════════════════════════════════════════ -->
+<div id="user-report-modal" class="modal-overlay hidden">
+    <div class="modal-box">
+        <button class="modal-close" onclick="closeUserModal()">×</button>
+        <div class="modal-title" id="modal-user-name"></div>
+        <div id="modal-report-container"></div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!-- MODAL: Progress Chart                                  -->
+<!-- ══════════════════════════════════════════════════════ -->
+<div id="progress-modal" class="modal-overlay hidden">
+    <div class="modal-box">
+        <button class="modal-close" onclick="closeProgressModal()">×</button>
+        <div class="modal-title" id="progress-modal-title">Progress</div>
+        <div class="chart-tabs" id="progress-modal-tabs">
+            <button class="chart-tab-btn active" onclick="setModalChartView('daily', this)">Daily</button>
+            <button class="chart-tab-btn"        onclick="setModalChartView('weekly', this)">Weekly</button>
+            <button class="chart-tab-btn"        onclick="setModalChartView('monthly', this)">Monthly</button>
+        </div>
+        <div class="chart-container" style="height:280px;"><canvas id="modal-progress-chart"></canvas></div>
+        <p style="font-size:11px;color:var(--muted);text-align:center;margin-top:8px;">Daily max: 160 · Weekly max: 1120</p>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!-- MODAL: Change Password                                 -->
+<!-- ══════════════════════════════════════════════════════ -->
+<div id="password-modal" class="modal-overlay hidden">
+    <div class="modal-box sm">
+        <button class="modal-close" onclick="closePasswordModal()">×</button>
+        <div class="modal-title">🔑 Change Password</div>
+        <div class="pwd-field-group">
+            <label>New Password</label>
+            <input type="password" id="pwd-new" placeholder="Minimum 6 characters" autocomplete="new-password">
+        </div>
+        <div class="pwd-field-group">
+            <label>Confirm New Password</label>
+            <input type="password" id="pwd-confirm" placeholder="Re-enter new password" autocomplete="new-password">
+        </div>
+        <button onclick="submitPasswordChange()" class="btn-primary" style="margin-top:6px;">Update Password</button>
+        <button onclick="closePasswordModal()" class="btn-gray">Cancel</button>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!-- MODAL: Edit Sadhana (Super Admin only)                 -->
+<!-- ══════════════════════════════════════════════════════ -->
+<div id="edit-sadhana-modal" class="modal-overlay hidden">
+    <div class="modal-box md">
+        <button class="modal-close" onclick="closeEditModal()">×</button>
+        <div class="modal-title" id="edit-modal-title">✏️ Edit Sadhana</div>
+
+        <!-- Hidden: user level for scoring context -->
+        <input type="hidden" id="edit-user-level">
+
+        <div class="edit-grid">
+            <div class="edit-field-group">
+                <label>Bed Time (Night)</label>
+                <input type="time" id="edit-sleep-time" oninput="updateEditPreview()">
+            </div>
+            <div class="edit-field-group">
+                <label>Wake Up Time</label>
+                <input type="time" id="edit-wakeup-time" oninput="updateEditPreview()">
+            </div>
+            <div class="edit-field-group">
+                <label>Chanting Completed By</label>
+                <input type="time" id="edit-chanting-time" oninput="updateEditPreview()">
+            </div>
+            <div class="edit-field-group">
+                <label>Day Sleep (mins)</label>
+                <input type="number" id="edit-day-sleep-mins" min="0" oninput="updateEditPreview()">
+            </div>
+            <div class="edit-field-group">
+                <label>Reading (mins)</label>
+                <input type="number" id="edit-reading-mins" min="0" oninput="updateEditPreview()">
+            </div>
+            <div class="edit-field-group">
+                <label>Hearing (mins)</label>
+                <input type="number" id="edit-hearing-mins" min="0" oninput="updateEditPreview()">
+            </div>
+            <div class="edit-field-group">
+                <label>Service / Seva (mins)</label>
+                <input type="number" id="edit-service-mins" min="0" oninput="updateEditPreview()">
+            </div>
+            <div class="edit-field-group" id="edit-notes-row">
+                <label>Notes Revision (mins)</label>
+                <input type="number" id="edit-notes-mins" min="0" oninput="updateEditPreview()">
+            </div>
+        </div>
+
+        <!-- Live score preview -->
+        <div class="edit-score-preview" id="edit-score-preview">Score will appear here</div>
+
+        <!-- Reason for edit -->
+        <div class="edit-reason-group">
+            <label>Reason for Edit <span style="color:#aaa;font-weight:400;">(optional but recommended)</span></label>
+            <textarea id="edit-reason" placeholder="e.g. User entered 11:00 instead of 23:00 for bed time"></textarea>
+        </div>
+
+        <button onclick="submitEditSadhana()" class="btn-warning" style="margin-top:4px;">
+            💾 Save Changes
+        </button>
+        <button onclick="closeEditModal()" class="btn-gray">Cancel</button>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!-- MODAL: Edit History Viewer                             -->
+<!-- ══════════════════════════════════════════════════════ -->
+<div id="edit-history-modal" class="modal-overlay hidden">
+    <div class="modal-box md">
+        <button class="modal-close" onclick="closeEditHistoryModal()">×</button>
+        <div class="modal-title">✏️ Edit History</div>
+        <div id="edit-history-content"></div>
+        <button onclick="closeEditHistoryModal()" class="btn-gray" style="margin-top:12px;">Close</button>
+    </div>
+</div>
+
+<!-- ══ MODAL: Notifications Panel ══ -->
+<div id="notifications-modal" class="modal-overlay hidden">
+    <div class="modal-box sm">
+        <button class="modal-close" onclick="closeNotificationsPanel()">×</button>
+        <div class="modal-title">🔔 Notifications</div>
+        <div id="notifications-list" style="min-height:80px;">
+            <p style="color:var(--muted);text-align:center;font-size:13px;padding:20px 0;">No new notifications</p>
+        </div>
+        <div style="margin-top:14px;">
+            <button onclick="requestNotificationPermission()" class="btn-primary btn-sm" style="width:100%;padding:10px;">
+                Enable Push Notifications
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ══ MODAL: User Guide ══ -->
+<div id="user-guide-modal" class="modal-overlay hidden">
+    <div class="modal-box md">
+        <button class="modal-close" onclick="document.getElementById('user-guide-modal').classList.add('hidden')">×</button>
+        <div class="modal-title">📖 Sadhana Tracker — User Guide</div>
+
+        <!-- Tab Navigation — OUTSIDE scroll so always visible -->
+        <div style="display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;margin-bottom:10px;border-bottom:2px solid #e5e7eb;padding-bottom:10px;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
+            <button onclick="guideTab('intro')"    id="gtab-intro"    class="guide-tab active">🏠 Intro</button>
+            <button onclick="guideTab('form')"     id="gtab-form"     class="guide-tab">📝 Form</button>
+            <button onclick="guideTab('level1')"   id="gtab-level1"   class="guide-tab" style="color:#1565C0;">L-1</button>
+            <button onclick="guideTab('level2')"   id="gtab-level2"   class="guide-tab" style="color:#2E7D32;">L-2</button>
+            <button onclick="guideTab('level3')"   id="gtab-level3"   class="guide-tab" style="color:#6A1B9A;">L-3</button>
+            <button onclick="guideTab('level4')"   id="gtab-level4"   class="guide-tab" style="color:#B71C1C;">L-4</button>
+            <button onclick="guideTab('reports')"  id="gtab-reports"  class="guide-tab">📊 Reports</button>
+            <button onclick="guideTab('admin')"    id="gtab-admin"    class="guide-tab">⚙️ Admin</button>
+            <button onclick="guideTab('faq')"      id="gtab-faq"      class="guide-tab">❓ FAQ</button>
+        </div>
+
+        <!-- Scrollable content only -->
+        <div style="overflow-y:auto;max-height:65vh;padding:4px 4px;">
+
+        <!-- INTRO -->
+        <div id="gpanel-intro" class="guide-panel">
+            <div class="guide-hero" style="background:linear-gradient(135deg,#1a237e,#4a148c);color:#fff;border-radius:14px;padding:20px;text-align:center;margin-bottom:16px;">
+                <div style="font-size:36px;margin-bottom:8px;">🙏</div>
+                <div style="font-size:18px;font-weight:700;margin-bottom:4px;">Sadhana Tracker</div>
+                <div style="font-size:12px;opacity:0.85;font-style:italic;">Dedicated to Guru and Gauranga</div>
+            </div>
+            <div class="guide-section">
+                <h3>What does this app track?</h3>
+                <div class="guide-row"><span class="guide-icon">🌙</span><span>Sleep (Nidra) time</span></div>
+                <div class="guide-row"><span class="guide-icon">🌅</span><span>Wake-up time</span></div>
+                <div class="guide-row"><span class="guide-icon">📿</span><span>Chanting (Japa) time</span></div>
+                <div class="guide-row"><span class="guide-icon">📖</span><span>Reading (Pathan) minutes</span></div>
+                <div class="guide-row"><span class="guide-icon">🎧</span><span>Hearing (class/lecture) minutes</span></div>
+                <div class="guide-row"><span class="guide-icon">🎵</span><span>Instrument / Activity minutes</span></div>
+                <div class="guide-row"><span class="guide-icon">😴</span><span>Day sleep duration</span></div>
+                <div class="guide-row"><span class="guide-icon">🛠️</span><span>Service (Seva) — weekly pool</span></div>
+                <div class="guide-row"><span class="guide-icon">📝</span><span>Notes Revision — Level-4 only</span></div>
+                <div class="guide-row"><span class="guide-icon">👗</span><span>Vaishnav Dress / Tilak / Mala — Sundays</span></div>
+            </div>
+            <div class="guide-section">
+                <h3>Four Devotee Levels</h3>
+                <p style="font-size:12px;color:var(--muted);margin-bottom:10px;">Your level is assigned by your Admin — it determines your scoring rules and daily maximum.</p>
+                <table class="score-table">
+                    <tr><th>Level</th><th>Daily Max</th><th>Weekly Max</th></tr>
+                    <tr><td style="color:#1565C0;font-weight:700;">Level-1</td><td>105 pts</td><td>760 pts</td></tr>
+                    <tr><td style="color:#2E7D32;font-weight:700;">Level-2</td><td>110 pts</td><td>795 pts</td></tr>
+                    <tr><td style="color:#6A1B9A;font-weight:700;">Level-3</td><td>115 pts</td><td>830 pts</td></tr>
+                    <tr><td style="color:#B71C1C;font-weight:700;">Level-4</td><td>140 pts</td><td>1005 pts</td></tr>
+                </table>
+                <div class="guide-info-box" style="margin-top:10px;">
+                    📌 New devotees start at <b>Level-1</b> by default.<br>
+                    📌 Level is changed by Team Leader / Dept Admin / Super Admin.
+                </div>
+            </div>
+            <div class="guide-section">
+                <h3>📐 How Weekly % is Calculated</h3>
+                <div class="guide-formula-box">
+                    Weekly % = Total Score ÷ (Daily Max × Submitted Days) × 100
+                </div>
+                <p style="font-size:12px;color:var(--muted);margin-top:8px;">Only submitted days count in the denominator — future days are excluded. This is the <b>Fair Denominator</b> system.</p>
+            </div>
+        </div>
+
+        <!-- DAILY FORM -->
+        <div id="gpanel-form" class="guide-panel hidden">
+            <div class="guide-section">
+                <h3>📝 How to Fill Daily Sadhana</h3>
+                <div class="guide-row"><span class="guide-icon">1️⃣</span><span>Go to <b>Daily Entry</b> tab on the dashboard.</span></div>
+                <div class="guide-row"><span class="guide-icon">2️⃣</span><span>Select the date (today or a missed past date).</span></div>
+                <div class="guide-row"><span class="guide-icon">3️⃣</span><span>Fill in all the fields listed below.</span></div>
+                <div class="guide-row"><span class="guide-icon">4️⃣</span><span>Tap <b>Submit Sadhana</b> ✅</span></div>
+            </div>
+            <div class="guide-section">
+                <h3>📋 Field Reference</h3>
+                <table class="score-table">
+                    <tr><th>Field</th><th>What to Enter</th></tr>
+                    <tr><td>🌙 Bed Time</td><td>Time you slept last night (e.g. 22:30)</td></tr>
+                    <tr><td>🌅 Wake-up</td><td>Time you woke up (e.g. 05:30)</td></tr>
+                    <tr><td>📿 Chanting Time</td><td>Time you finished japa (e.g. 07:00)</td></tr>
+                    <tr><td>📖 Pathan (min)</td><td>Minutes reading scripture</td></tr>
+                    <tr><td>🎧 Hearing (min)</td><td>Minutes of class/lecture</td></tr>
+                    <tr><td>🎵 Instrument (min)</td><td>Minutes on your activity</td></tr>
+                    <tr><td>😴 Day Sleep (min)</td><td>Total daytime rest in minutes</td></tr>
+                    <tr><td>🛠️ Seva (min)</td><td>Minutes of service done</td></tr>
+                    <tr><td>📝 Notes Revision</td><td>Level-4 only — minutes revising notes</td></tr>
+                    <tr><td>👗 Dress / Tilak / Mala</td><td>Sundays only — Yes or No</td></tr>
+                </table>
+            </div>
+            <div class="guide-section">
+                <div class="guide-warn-box">
+                    ⚠️ <b>NR (Not Reported)</b> = −30 penalty if you miss a day.<br>
+                    ✅ You can fill past dates anytime.<br>
+                    👗 Dress / Tilak / Mala fields appear <b>only on Sundays</b>.<br>
+                    🛠️ Service marks are <b>weekly pool</b> — no daily marks shown.
+                </div>
+            </div>
+        </div>
+
+        <!-- LEVEL 1 -->
+        <div id="gpanel-level1" class="guide-panel hidden">
+            <div class="guide-level-header" style="background:#E3F2FD;border-left:5px solid #1565C0;">
+                <span style="color:#1565C0;font-size:18px;font-weight:800;">Level-1</span>
+                <span style="font-size:12px;color:#555;margin-left:10px;">Daily Max: 105 pts &nbsp;|&nbsp; Weekly: 760 pts</span>
+            </div>
+            <div class="guide-section">
+                <h3 style="color:#1565C0;">🌙 Nidra (Sleep Time)</h3>
+                <table class="score-table">
+                    <tr><th>Bed Time</th><th>Points</th></tr>
+                    <tr><td>≤ 11:00 PM</td><td class="score-pos">+25</td></tr>
+                    <tr><td>11:01 – 11:05 PM</td><td class="score-pos">+20</td></tr>
+                    <tr><td>11:06 – 11:10 PM</td><td class="score-pos">+15</td></tr>
+                    <tr><td>11:11 – 11:15 PM</td><td class="score-pos">+10</td></tr>
+                    <tr><td>11:16 – 11:20 PM</td><td class="score-pos">+5</td></tr>
+                    <tr><td>11:21 – 11:25 PM</td><td>0</td></tr>
+                    <tr><td>After 11:25 PM</td><td class="score-neg">−5</td></tr>
+                </table>
+            </div>
+            <div class="guide-section">
+                <h3 style="color:#1565C0;">🌅 Wake-up Time</h3>
+                <table class="score-table">
+                    <tr><th>Wake-up Time</th><th>Points</th></tr>
+                    <tr><td>≤ 6:00 AM</td><td class="score-pos">+25</td></tr>
+                    <tr><td>6:01 – 6:05 AM</td><td class="score-pos">+20</td></tr>
+                    <tr><td>6:06 – 6:10 AM</td><td class="score-pos">+15</td></tr>
+                    <tr><td>6:11 – 6:15 AM</td><td class="score-pos">+10</td></tr>
+                    <tr><td>6:16 – 6:20 AM</td><td class="score-pos">+5</td></tr>
+                    <tr><td>6:21 – 6:25 AM</td><td>0</td></tr>
+                    <tr><td>After 6:25 AM</td><td class="score-neg">−5</td></tr>
+                </table>
+            </div>
+            <div class="guide-section">
+                <h3 style="color:#1565C0;">📿 Chanting (Japa) Time</h3>
+                <table class="score-table">
+                    <tr><th>Finished Chanting By</th><th>Points</th></tr>
+                    <tr><td>≤ 9:00 AM</td><td class="score-pos">+25</td></tr>
+                    <tr><td>9:01 – 9:30 AM</td><td class="score-pos">+20</td></tr>
+                    <tr><td>9:31 – 11:00 AM</td><td class="score-pos">+15</td></tr>
+                    <tr><td>11:01 AM – 2:30 PM</td><td class="score-pos">+10</td></tr>
+                    <tr><td>2:31 – 5:00 PM</td><td class="score-pos">+5</td></tr>
+                    <tr><td>5:01 – 7:00 PM</td><td>0</td></tr>
+                    <tr><td>After 7:00 PM</td><td class="score-neg">−5</td></tr>
+                </table>
+            </div>
+            <div class="guide-section">
+                <h3 style="color:#1565C0;">📖 Pathan / Hearing — Best of Two (Max 20)</h3>
+                <div class="guide-info-box">Only the <b>better score</b> between Pathan and Hearing counts. Negative scores are floored to 0.</div>
+                <table class="score-table" style="margin-top:8px;">
+                    <tr><th>Minutes</th><th>Points</th></tr>
+                    <tr><td>≥ 20 min</td><td class="score-pos">+20</td></tr>
+                    <tr><td>15–19 min</td><td class="score-pos">+15</td></tr>
+                    <tr><td>10–14 min</td><td class="score-pos">+10</td></tr>
+                    <tr><td>5–9 min</td><td class="score-pos">+5</td></tr>
+                    <tr><td>&lt; 5 min</td><td>0 (floor)</td></tr>
+                </table>
+            </div>
+            <div class="guide-section">
+                <h3 style="color:#1565C0;">😴 Day Sleep</h3>
+                <table class="score-table">
+                    <tr><th>Duration</th><th>Points</th></tr>
+                    <tr><td>≤ 90 minutes</td><td class="score-pos">+10</td></tr>
+                    <tr><td>&gt; 90 minutes</td><td class="score-neg">−5</td></tr>
+                </table>
+            </div>
+            <div class="guide-section">
+                <h3 style="color:#1565C0;">🛠️ Service Pool (Weekly, Saturday check)</h3>
+                <table class="score-table">
+                    <tr><th>Weekly Seva Minutes</th><th>Points</th></tr>
+                    <tr><td>≥ 60 min</td><td class="score-pos">+25</td></tr>
+                    <tr><td>50–59 min</td><td class="score-pos">+20</td></tr>
+                    <tr><td>40–49 min</td><td class="score-pos">+15</td></tr>
+                    <tr><td>30–39 min</td><td class="score-pos">+10</td></tr>
+                    <tr><td>20–29 min</td><td class="score-pos">+5</td></tr>
+                    <tr><td>10–19 min</td><td>0</td></tr>
+                    <tr><td>&lt; 10 min</td><td class="score-neg">−5</td></tr>
+                </table>
+            </div>
+            <div class="guide-section">
+                <h3 style="color:#1565C0;">🎵 Instrument Bonus (Daily)</h3>
+                <table class="score-table">
+                    <tr><th>Minutes</th><th>Bonus</th></tr>
+                    <tr><td>≥ 20 min</td><td class="score-pos">+5</td></tr>
+                    <tr><td>15–19 min</td><td class="score-pos">+3</td></tr>
+                    <tr><td>10–14 min</td><td class="score-pos">+1</td></tr>
+                    <tr><td>&lt; 10 min</td><td>0</td></tr>
+                </table>
+            </div>
+            <div class="guide-section">
+                <h3 style="color:#1565C0;">👗 Vaishnav Dress / Tilak / Mala (Sunday Bonus)</h3>
+                <table class="score-table">
+                    <tr><th>All three: Yes</th><td class="score-pos">+5</td></tr>
+                    <tr><th>Any missing</th><td>0 (no penalty)</td></tr>
+                </table>
+                <div class="guide-info-box" style="margin-top:8px;">IGF/ICF_MTG: Gopi Dress + Blouse &nbsp;|&nbsp; IYF/ICF_PRJI: Dhoti + Kurta</div>
+            </div>
+        </div>
+
+        <!-- LEVEL 2 -->
+        <div id="gpanel-level2" class="guide-panel hidden">
+            <div class="guide-level-header" style="background:#E8F5E9;border-left:5px solid #2E7D32;">
+                <span style="color:#2E7D32;font-size:18px;font-weight:800;">Level-2</span>
+                <span style="font-size:12px;color:#555;margin-left:10px;">Daily Max: 110 pts &nbsp;|&nbsp; Weekly: 795 pts</span>
+            </div>
+            <div class="guide-section">
+                <h3 style="color:#2E7D32;">🌙 Nidra — Same as Level-1</h3>
+                <table class="score-table">
+                    <tr><th>Bed Time</th><th>Points</th></tr>
+                    <tr><td>≤ 11:00 PM</td><td class="score-pos">+25</td></tr>
+                    <tr><td>11:01 – 11:05 PM</td><td class="score-pos">+20</td></tr>
+                    <tr><td>11:06 – 11:10 PM</td><td class="score-pos">+15</td></tr>
+                    <tr><td>11:11 – 11:15 PM</td><td class="score-pos">+10</td></tr>
+                    <tr><td>11:16 – 11:20 PM</td><td class="score-pos">+5</td></tr>
+                    <tr><td>11:21 – 11:25 PM</td><td>0</td></tr>
+                    <tr><td>After 11:25 PM</td><td class="score-neg">−5</td></tr>
+                </table>
+            </div>
+            <div class="guide-section">
+                <h3 style="color:#2E7D32;">🌅 Wake-up — Same as Level-1</h3>
+                <table class="score-table">
+                    <tr><th>Wake-up Time</th><th>Points</th></tr>
+                    <tr><td>≤ 6:00 AM</td><td class="score-pos">+25</td></tr>
+                    <tr><td>6:01 – 6:05 AM</td><td class="score-pos">+20</td></tr>
+                    <tr><td>6:06 – 6:10 AM</td><td class="score-pos">+15</td></tr>
+                    <tr><td>6:11 – 6:15 AM</td><td class="score-pos">+10</td></tr>
+                    <tr><td>6:16 – 6:20 AM</td><td class="score-pos">+5</td></tr>
+                    <tr><td>6:21 – 6:25 AM</td><td>0</td></tr>
+                    <tr><td>After 6:25 AM</td><td class="score-neg">−5</td></tr>
+                </table>
+            </div>
+            <div class="guide-section">
+                <h3 style="color:#2E7D32;">📿 Chanting — Same as Level-1</h3>
+                <table class="score-table">
+                    <tr><th>Finished Chanting By</th><th>Points</th></tr>
+                    <tr><td>≤ 9:00 AM</td><td class="score-pos">+25</td></tr>
+                    <tr><td>9:01 – 9:30 AM</td><td class="score-pos">+20</td></tr>
+                    <tr><td>9:31 – 11:00 AM</td><td class="score-pos">+15</td></tr>
+                    <tr><td>11:01 AM – 2:30 PM</td><td class="score-pos">+10</td></tr>
+                    <tr><td>2:31 – 5:00 PM</td><td class="score-pos">+5</td></tr>
+                    <tr><td>5:01 – 7:00 PM</td><td>0</td></tr>
+                    <tr><td>After 7:00 PM</td><td class="score-neg">−5</td></tr>
+                </table>
+            </div>
+            <div class="guide-section">
+                <h3 style="color:#2E7D32;">📖 Pathan / Hearing — Best of Two (Max 25)</h3>
+                <div class="guide-info-box">Only the <b>better score</b> between Pathan and Hearing counts. Negative clamped to 0. Max increased to 25 (was 20 at L-1).</div>
+                <table class="score-table" style="margin-top:8px;">
+                    <tr><th>Minutes</th><th>Points</th></tr>
+                    <tr><td>≥ 25 min</td><td class="score-pos">+25</td></tr>
+                    <tr><td>20–24 min</td><td class="score-pos">+20</td></tr>
+                    <tr><td>15–19 min</td><td class="score-pos">+15</td></tr>
+                    <tr><td>10–14 min</td><td class="score-pos">+10</td></tr>
+                    <tr><td>5–9 min</td><td class="score-pos">+5</td></tr>
+                    <tr><td>&lt; 5 min</td><td>0 (floor)</td></tr>
+                </table>
+            </div>
+            <div class="guide-section">
+                <h3 style="color:#2E7D32;">😴 Day Sleep — Same as Level-1</h3>
+                <table class="score-table">
+                    <tr><th>Duration</th><th>Points</th></tr>
+                    <tr><td>≤ 90 minutes</td><td class="score-pos">+10</td></tr>
+                    <tr><td>&gt; 90 minutes</td><td class="score-neg">−5</td></tr>
+                </table>
+            </div>
+            <div class="guide-section">
+                <h3 style="color:#2E7D32;">🛠️ Service Pool — Weekly (Target: 90 min)</h3>
+                <table class="score-table">
+                    <tr><th>Weekly Seva Minutes</th><th>Points</th></tr>
+                    <tr><td>≥ 90 min</td><td class="score-pos">+25</td></tr>
+                    <tr><td>80–89 min</td><td class="score-pos">+20</td></tr>
+                    <tr><td>70–79 min</td><td class="score-pos">+15</td></tr>
+                    <tr><td>60–69 min</td><td class="score-pos">+10</td></tr>
+                    <tr><td>50–59 min</td><td class="score-pos">+5</td></tr>
+                    <tr><td>40–49 min</td><td>0</td></tr>
+                    <tr><td>&lt; 40 min</td><td class="score-neg">−5</td></tr>
+                </table>
+            </div>
+            <div class="guide-section">
+                <h3 style="color:#2E7D32;">🎵 Instrument Bonus (Daily)</h3>
+                <table class="score-table">
+                    <tr><th>Minutes</th><th>Bonus</th></tr>
+                    <tr><td>≥ 20 min</td><td class="score-pos">+5</td></tr>
+                    <tr><td>15–19 min</td><td class="score-pos">+3</td></tr>
+                    <tr><td>10–14 min</td><td class="score-pos">+1</td></tr>
+                    <tr><td>&lt; 10 min</td><td>0</td></tr>
+                </table>
+            </div>
+            <div class="guide-section">
+                <h3 style="color:#2E7D32;">👗 Vaishnav Dress / Tilak / Mala (Sunday)</h3>
+                <table class="score-table">
+                    <tr><td>All three: Yes</td><td class="score-pos">+5</td></tr>
+                    <tr><td>Any missing</td><td>0 (no penalty at L-2)</td></tr>
+                </table>
+                <div class="guide-info-box" style="margin-top:8px;">IGF/ICF_MTG: Gopi Dress + Blouse &nbsp;|&nbsp; IYF/ICF_PRJI: Dhoti + Kurta</div>
+            </div>
+        </div>
+
+        <!-- LEVEL 3 -->
+        <div id="gpanel-level3" class="guide-panel hidden">
+            <div class="guide-level-header" style="background:#F3E5F5;border-left:5px solid #6A1B9A;">
+                <span style="color:#6A1B9A;font-size:18px;font-weight:800;">Level-3</span>
+                <span style="font-size:12px;color:#555;margin-left:10px;">Daily Max: 115 pts &nbsp;|&nbsp; Weekly: 830 pts</span>
+            </div>
+            <div class="guide-warn-box" style="margin-bottom:12px;">
+                ⚡ <b>Stricter</b> sleep/wake targets<br>
+                ⚡ Instrument is <b>Compulsory</b> (not just bonus)<br>
+                ⚡ Pathan <b>AND</b> Hearing both scored separately<br>
+                ⚡ Day sleep limit: <b>60 min</b> (was 90)<br>
+                ⚡ Missing Dress/Tilak/Mala on Sunday = <b>−5 penalty</b>
+            </div>
+            <div class="guide-section">
+                <h3 style="color:#6A1B9A;">🌙 Nidra (Stricter)</h3>
+                <table class="score-table">
+                    <tr><th>Bed Time</th><th>Points</th></tr>
+                    <tr><td>≤ 10:30 PM</td><td class="score-pos">+25</td></tr>
+                    <tr><td>10:31 – 10:35 PM</td><td class="score-pos">+20</td></tr>
+                    <tr><td>10:36 – 10:40 PM</td><td class="score-pos">+15</td></tr>
+                    <tr><td>10:41 – 10:45 PM</td><td class="score-pos">+10</td></tr>
+                    <tr><td>10:46 – 10:50 PM</td><td class="score-pos">+5</td></tr>
+                    <tr><td>10:51 – 10:55 PM</td><td>0</td></tr>
+                    <tr><td>After 10:55 PM</td><td class="score-neg">−5</td></tr>
+                </table>
+            </div>
+            <div class="guide-section">
+                <h3 style="color:#6A1B9A;">🌅 Wake-up (Stricter)</h3>
+                <table class="score-table">
+                    <tr><th>Wake-up Time</th><th>Points</th></tr>
+                    <tr><td>≤ 5:30 AM</td><td class="score-pos">+25</td></tr>
+                    <tr><td>5:31 – 5:35 AM</td><td class="score-pos">+20</td></tr>
+                    <tr><td>5:36 – 5:40 AM</td><td class="score-pos">+15</td></tr>
+                    <tr><td>5:41 – 5:45 AM</td><td class="score-pos">+10</td></tr>
+                    <tr><td>5:46 – 5:50 AM</td><td class="score-pos">+5</td></tr>
+                    <tr><td>5:51 – 5:55 AM</td><td>0</td></tr>
+                    <tr><td>After 5:55 AM</td><td class="score-neg">−5</td></tr>
+                </table>
+            </div>
+            <div class="guide-section">
+                <h3 style="color:#6A1B9A;">📿 Chanting — Same as Level-1 &amp; 2</h3>
+                <table class="score-table">
+                    <tr><th>Finished Chanting By</th><th>Points</th></tr>
+                    <tr><td>≤ 9:00 AM</td><td class="score-pos">+25</td></tr>
+                    <tr><td>9:01 – 9:30 AM</td><td class="score-pos">+20</td></tr>
+                    <tr><td>9:31 – 11:00 AM</td><td class="score-pos">+15</td></tr>
+                    <tr><td>11:01 AM – 2:30 PM</td><td class="score-pos">+10</td></tr>
+                    <tr><td>2:31 – 5:00 PM</td><td class="score-pos">+5</td></tr>
+                    <tr><td>5:01 – 7:00 PM</td><td>0</td></tr>
+                    <tr><td>After 7:00 PM</td><td class="score-neg">−5</td></tr>
+                </table>
+            </div>
+            <div class="guide-section">
+                <h3 style="color:#6A1B9A;">📖 Pathan &amp; 🎧 Hearing — Best of Two (Max 25)</h3>
+                <div class="guide-info-box">⚠️ Same as L1/L2 — only the <b>better score</b> counts. Negative floored to 0. Max increased to 25.</div>
+                <table class="score-table" style="margin-top:8px;">
+                    <tr><th>Minutes (each)</th><th>Points</th></tr>
+                    <tr><td>≥ 30 min</td><td class="score-pos">+25</td></tr>
+                    <tr><td>25–29 min</td><td class="score-pos">+20</td></tr>
+                    <tr><td>20–24 min</td><td class="score-pos">+15</td></tr>
+                    <tr><td>15–19 min</td><td class="score-pos">+10</td></tr>
+                    <tr><td>10–14 min</td><td class="score-pos">+5</td></tr>
+                    <tr><td>5–9 min</td><td>0</td></tr>
+                    <tr><td>&lt; 5 min</td><td class="score-neg">−5 (floored to 0)</td></tr>
+                </table>
+            </div>
+            <div class="guide-section">
+                <h3 style="color:#6A1B9A;">🎵 Instrument — Compulsory (Max 5)</h3>
+                <div class="guide-info-box">Instrument is now <b>mandatory</b> — not optional bonus like L1/L2.</div>
+                <table class="score-table" style="margin-top:8px;">
+                    <tr><th>Minutes</th><th>Points</th></tr>
+                    <tr><td>≥ 20 min</td><td class="score-pos">+5</td></tr>
+                    <tr><td>15–19 min</td><td class="score-pos">+3</td></tr>
+                    <tr><td>10–14 min</td><td class="score-pos">+3</td></tr>
+                    <tr><td>&lt; 10 min</td><td>0</td></tr>
+                </table>
+            </div>
+            <div class="guide-section">
+                <h3 style="color:#6A1B9A;">😴 Day Sleep (Stricter — 60 min limit)</h3>
+                <table class="score-table">
+                    <tr><th>Duration</th><th>Points</th></tr>
+                    <tr><td>≤ 60 minutes</td><td class="score-pos">+10</td></tr>
+                    <tr><td>&gt; 60 minutes</td><td class="score-neg">−5</td></tr>
+                </table>
+            </div>
+            <div class="guide-section">
+                <h3 style="color:#6A1B9A;">🛠️ Service Pool — Weekly (Target: 90 min)</h3>
+                <table class="score-table">
+                    <tr><th>Weekly Seva Minutes</th><th>Points</th></tr>
+                    <tr><td>≥ 90 min</td><td class="score-pos">+25</td></tr>
+                    <tr><td>80–89 min</td><td class="score-pos">+20</td></tr>
+                    <tr><td>70–79 min</td><td class="score-pos">+15</td></tr>
+                    <tr><td>60–69 min</td><td class="score-pos">+10</td></tr>
+                    <tr><td>50–59 min</td><td class="score-pos">+5</td></tr>
+                    <tr><td>40–49 min</td><td>0</td></tr>
+                    <tr><td>&lt; 40 min</td><td class="score-neg">−5</td></tr>
+                </table>
+            </div>
+            <div class="guide-section">
+                <h3 style="color:#6A1B9A;">👗 Vaishnav Dress / Tilak / Mala — Sunday (±5 Penalty applies!)</h3>
+                <table class="score-table">
+                    <tr><th>Condition</th><th>Points</th></tr>
+                    <tr><td>All three: Yes</td><td class="score-pos">+5</td></tr>
+                    <tr><td>Any missing</td><td class="score-neg">−5 ⚠️ Penalty!</td></tr>
+                </table>
+                <div class="guide-info-box" style="margin-top:8px;">IGF/ICF_MTG: Gopi Dress + Blouse &nbsp;|&nbsp; IYF/ICF_PRJI: Dhoti + Kurta</div>
+            </div>
+        </div>
+
+        <!-- LEVEL 4 -->
+        <div id="gpanel-level4" class="guide-panel hidden">
+            <div class="guide-level-header" style="background:#FFEBEE;border-left:5px solid #B71C1C;">
+                <span style="color:#B71C1C;font-size:18px;font-weight:800;">Level-4</span>
+                <span style="font-size:12px;color:#555;margin-left:10px;">Daily Max: 140 pts &nbsp;|&nbsp; Weekly: 1005 pts</span>
+            </div>
+            <div class="guide-warn-box" style="margin-bottom:12px;">
+                🔴 Strictest wake-up target: <b>5:05 AM</b><br>
+                🔴 Pathan + Hearing + Instrument all <b>compulsory</b><br>
+                🔴 <b>Notes Revision</b> bonus added (up to +20/day)<br>
+                🔴 Dress penalty same as Level-3 (−5 if missing)
+            </div>
+            <div class="guide-section">
+                <h3 style="color:#B71C1C;">🌙 Nidra — Same as Level-3 (Target ≤ 10:30 PM)</h3>
+                <table class="score-table">
+                    <tr><th>Bed Time</th><th>Points</th></tr>
+                    <tr><td>≤ 10:30 PM</td><td class="score-pos">+25</td></tr>
+                    <tr><td>10:31 – 10:35 PM</td><td class="score-pos">+20</td></tr>
+                    <tr><td>10:36 – 10:40 PM</td><td class="score-pos">+15</td></tr>
+                    <tr><td>10:41 – 10:45 PM</td><td class="score-pos">+10</td></tr>
+                    <tr><td>10:46 – 10:50 PM</td><td class="score-pos">+5</td></tr>
+                    <tr><td>10:51 – 10:55 PM</td><td>0</td></tr>
+                    <tr><td>After 10:55 PM</td><td class="score-neg">−5</td></tr>
+                </table>
+            </div>
+            <div class="guide-section">
+                <h3 style="color:#B71C1C;">🌅 Wake-up (Strictest of all levels)</h3>
+                <table class="score-table">
+                    <tr><th>Wake-up Time</th><th>Points</th></tr>
+                    <tr><td>≤ 5:05 AM</td><td class="score-pos">+25</td></tr>
+                    <tr><td>5:06 – 5:10 AM</td><td class="score-pos">+20</td></tr>
+                    <tr><td>5:11 – 5:15 AM</td><td class="score-pos">+15</td></tr>
+                    <tr><td>5:16 – 5:20 AM</td><td class="score-pos">+10</td></tr>
+                    <tr><td>5:21 – 5:25 AM</td><td class="score-pos">+5</td></tr>
+                    <tr><td>5:26 – 5:30 AM</td><td>0</td></tr>
+                    <tr><td>After 5:30 AM</td><td class="score-neg">−5</td></tr>
+                </table>
+            </div>
+            <div class="guide-section">
+                <h3 style="color:#B71C1C;">📿 Chanting — Same as Level-1, 2 &amp; 3</h3>
+                <table class="score-table">
+                    <tr><th>Finished Chanting By</th><th>Points</th></tr>
+                    <tr><td>≤ 9:00 AM</td><td class="score-pos">+25</td></tr>
+                    <tr><td>9:01 – 9:30 AM</td><td class="score-pos">+20</td></tr>
+                    <tr><td>9:31 – 11:00 AM</td><td class="score-pos">+15</td></tr>
+                    <tr><td>11:01 AM – 2:30 PM</td><td class="score-pos">+10</td></tr>
+                    <tr><td>2:31 – 5:00 PM</td><td class="score-pos">+5</td></tr>
+                    <tr><td>5:01 – 7:00 PM</td><td>0</td></tr>
+                    <tr><td>After 7:00 PM</td><td class="score-neg">−5</td></tr>
+                </table>
+            </div>
+            <div class="guide-section">
+                <h3 style="color:#B71C1C;">📖 Pathan &amp; 🎧 Hearing — Both Compulsory (Max 25 each)</h3>
+                <div class="guide-info-box">Both scored <b>independently</b> — same scale as Level-3.</div>
+                <table class="score-table" style="margin-top:8px;">
+                    <tr><th>Minutes (each)</th><th>Points</th></tr>
+                    <tr><td>≥ 30 min</td><td class="score-pos">+25</td></tr>
+                    <tr><td>25–29 min</td><td class="score-pos">+20</td></tr>
+                    <tr><td>20–24 min</td><td class="score-pos">+15</td></tr>
+                    <tr><td>15–19 min</td><td class="score-pos">+10</td></tr>
+                    <tr><td>10–14 min</td><td class="score-pos">+5</td></tr>
+                    <tr><td>5–9 min</td><td>0</td></tr>
+                    <tr><td>&lt; 5 min</td><td class="score-neg">−5</td></tr>
+                </table>
+            </div>
+            <div class="guide-section">
+                <h3 style="color:#B71C1C;">📝 Notes Revision — Bonus (Max +20/day)</h3>
+                <div class="guide-info-box">Unique to Level-4 — revising class/lecture notes earns extra marks.</div>
+                <table class="score-table" style="margin-top:8px;">
+                    <tr><th>Minutes</th><th>Bonus</th></tr>
+                    <tr><td>≥ 20 min</td><td class="score-pos">+20</td></tr>
+                    <tr><td>15–19 min</td><td class="score-pos">+15</td></tr>
+                    <tr><td>10–14 min</td><td class="score-pos">+10</td></tr>
+                    <tr><td>5–9 min</td><td class="score-pos">+5</td></tr>
+                    <tr><td>&lt; 5 min</td><td>0</td></tr>
+                </table>
+            </div>
+            <div class="guide-section">
+                <h3 style="color:#B71C1C;">🎵 Instrument — Compulsory (Max 5)</h3>
+                <div class="guide-info-box">Same as Level-3 — compulsory, not optional.</div>
+                <table class="score-table" style="margin-top:8px;">
+                    <tr><th>Minutes</th><th>Points</th></tr>
+                    <tr><td>≥ 20 min</td><td class="score-pos">+5</td></tr>
+                    <tr><td>15–19 min</td><td class="score-pos">+3</td></tr>
+                    <tr><td>10–14 min</td><td class="score-pos">+3</td></tr>
+                    <tr><td>&lt; 10 min</td><td>0</td></tr>
+                </table>
+            </div>
+            <div class="guide-section">
+                <h3 style="color:#B71C1C;">😴 Day Sleep — Same as Level-3 (60 min limit)</h3>
+                <table class="score-table">
+                    <tr><th>Duration</th><th>Points</th></tr>
+                    <tr><td>≤ 60 minutes</td><td class="score-pos">+10</td></tr>
+                    <tr><td>&gt; 60 minutes</td><td class="score-neg">−5</td></tr>
+                </table>
+            </div>
+            <div class="guide-section">
+                <h3 style="color:#B71C1C;">🛠️ Service Pool — Weekly (Target: 90 min)</h3>
+                <table class="score-table">
+                    <tr><th>Weekly Seva Minutes</th><th>Points</th></tr>
+                    <tr><td>≥ 90 min</td><td class="score-pos">+25</td></tr>
+                    <tr><td>80–89 min</td><td class="score-pos">+20</td></tr>
+                    <tr><td>70–79 min</td><td class="score-pos">+15</td></tr>
+                    <tr><td>60–69 min</td><td class="score-pos">+10</td></tr>
+                    <tr><td>50–59 min</td><td class="score-pos">+5</td></tr>
+                    <tr><td>40–49 min</td><td>0</td></tr>
+                    <tr><td>&lt; 40 min</td><td class="score-neg">−5</td></tr>
+                </table>
+            </div>
+            <div class="guide-section">
+                <h3 style="color:#B71C1C;">👗 Vaishnav Dress / Tilak / Mala — Sunday (±5 Penalty applies!)</h3>
+                <table class="score-table">
+                    <tr><th>Condition</th><th>Points</th></tr>
+                    <tr><td>All three: Yes</td><td class="score-pos">+5</td></tr>
+                    <tr><td>Any missing</td><td class="score-neg">−5 ⚠️ Penalty!</td></tr>
+                </table>
+                <div class="guide-info-box" style="margin-top:8px;">IGF/ICF_MTG: Gopi Dress + Blouse &nbsp;|&nbsp; IYF/ICF_PRJI: Dhoti + Kurta</div>
+            </div>
+        </div>
+
+        <!-- REPORTS -->
+        <div id="gpanel-reports" class="guide-panel hidden">
+            <div class="guide-section">
+                <h3>📊 My Reports Tab</h3>
+                <table class="score-table">
+                    <tr><th>Column</th><th>What It Shows</th></tr>
+                    <tr><td>Date</td><td>Day and date (latest first)</td></tr>
+                    <tr><td>Bed / Wake / Chant</td><td>Time + score (M = marks)</td></tr>
+                    <tr><td>Pathan / Hearing</td><td>Minutes + score; winner in 🟢 green</td></tr>
+                    <tr><td>Instrument</td><td>Minutes + score</td></tr>
+                    <tr><td>Day Sleep</td><td>Minutes + score</td></tr>
+                    <tr><td>Seva (m)</td><td>Service minutes only (no daily marks)</td></tr>
+                    <tr><td>Bonus</td><td>Click to see breakdown popup</td></tr>
+                    <tr><td>Total</td><td>Daily score + Bonus</td></tr>
+                    <tr><td>%</td><td>Score as % of daily maximum</td></tr>
+                </table>
+                <div class="guide-info-box" style="margin-top:10px;">
+                    🛠️ Service pool score shown in week header (e.g. "🛠️ 60min→+25")<br>
+                    📅 Click week header to expand/collapse<br>
+                    ✏️ Bonus column is clickable — shows full breakdown
+                </div>
+            </div>
+            <div class="guide-section">
+                <h3>📈 Progress Charts</h3>
+                <div class="guide-row"><span class="guide-icon">📊</span><span>Go to <b>Progress</b> tab for weekly bar/line charts of your performance.</span></div>
+                <div class="guide-row"><span class="guide-icon">📥</span><span>Use <b>Download Excel</b> to export your complete history.</span></div>
+            </div>
+        </div>
+
+        <!-- ADMIN -->
+        <div id="gpanel-admin" class="guide-panel hidden">
+            <div class="guide-section">
+                <h3>⚙️ Roles & Permissions</h3>
+                <table class="score-table">
+                    <tr><th>Role</th><th>Can Do</th></tr>
+                    <tr><td style="font-weight:700;color:#7c3aed;">Super Admin</td><td>Full access — all depts, edit sadhana, change any role/level</td></tr>
+                    <tr><td style="font-weight:700;color:#1565C0;">Dept Admin</td><td>Own dept — change roles (teamLeader/user) and levels</td></tr>
+                    <tr><td style="font-weight:700;color:#2E7D32;">Team Leader</td><td>Own team — view history, progress, change level</td></tr>
+                    <tr><td style="font-weight:700;">User</td><td>Own data only — fill sadhana, view reports</td></tr>
+                </table>
+            </div>
+            <div class="guide-section">
+                <h3>🔼 How to Change Level</h3>
+                <div class="guide-row"><span class="guide-icon">1️⃣</span><span>Go to <b>Admin Panel</b></span></div>
+                <div class="guide-row"><span class="guide-icon">2️⃣</span><span>Find the devotee's card</span></div>
+                <div class="guide-row"><span class="guide-icon">3️⃣</span><span>Click the <b>Level dropdown</b> on their card</span></div>
+                <div class="guide-row"><span class="guide-icon">4️⃣</span><span>Select new level and confirm</span></div>
+            </div>
+            <div class="guide-section">
+                <h3>🔑 First Super Admin Setup</h3>
+                <div class="guide-warn-box">
+                    Go to Firebase Console → Firestore → users → your document<br>
+                    Set field: <b>role = superAdmin</b> (case-sensitive)
+                </div>
+            </div>
+        </div>
+
+        <!-- FAQ -->
+        <div id="gpanel-faq" class="guide-panel hidden">
+            <div class="guide-section">
+                <div class="faq-item">
+                    <div class="faq-q">Can I fill yesterday's sadhana?</div>
+                    <div class="faq-a">Yes! Select yesterday's date from the date dropdown in Daily Entry.</div>
+                </div>
+                <div class="faq-item">
+                    <div class="faq-q">Why is my weekly % lower than expected?</div>
+                    <div class="faq-a">NR days count as −30 and are included in the denominator. Check if you have any missed days.</div>
+                </div>
+                <div class="faq-item">
+                    <div class="faq-q">What is NR?</div>
+                    <div class="faq-a">Not Reported — if you don't fill sadhana for a day, it's recorded as NR with −30 penalty.</div>
+                </div>
+                <div class="faq-item">
+                    <div class="faq-q">Why no marks in the Seva column?</div>
+                    <div class="faq-a">Service is a weekly pool — marks are calculated on Saturday. Daily table shows minutes only. Score appears in the week header.</div>
+                </div>
+                <div class="faq-item">
+                    <div class="faq-q">Can bonus % exceed 100%?</div>
+                    <div class="faq-a">Yes! Bonus marks (instrument, dress, notes) are not added to the denominator, so your % can go above 100%.</div>
+                </div>
+                <div class="faq-item">
+                    <div class="faq-q">I can't see Dress / Tilak / Mala fields.</div>
+                    <div class="faq-a">These fields appear only on Sundays.</div>
+                </div>
+                <div class="faq-item">
+                    <div class="faq-q">My level changed — will old scores change?</div>
+                    <div class="faq-a">No. Old entries keep their original scores. Only new entries use the updated level.</div>
+                </div>
+                <div class="faq-item">
+                    <div class="faq-q">How do I change my password?</div>
+                    <div class="faq-a">Dashboard → Profile menu → Change Password.</div>
+                </div>
+            </div>
+        </div>
+
+        </div><!-- end scroll area -->
+    </div>
+</div>
+
+<!-- ══ MODAL: About ══ -->
+<div id="about-modal" class="modal-overlay hidden">
+    <div class="modal-box sm">
+        <button class="modal-close" onclick="document.getElementById('about-modal').classList.add('hidden')">×</button>
+        <div class="modal-title">ℹ️ About</div>
+        <div style="text-align:center;padding:10px 0 20px;">
+            <img src="" style="width:72px;height:72px;border-radius:50%;margin-bottom:12px;">
+            <div style="font-size:18px;font-weight:700;color:#1A3C5E;margin-bottom:4px;">Krishna Parayan</div>
+            <div style="font-size:13px;color:var(--muted);margin-bottom:16px;font-style:italic;">Let's Move to Supreme Lord</div>
+            <div style="font-size:13px;color:#444;line-height:1.7;text-align:left;background:#f9fafb;padding:14px;border-radius:10px;">
+                <b>Sadhana Tracker</b> is a tool built to help devotees track their daily spiritual practices and stay accountable to their Sadhana routine.<br><br>
+                Built with love and dedication for the Krishna Parayan community. 🙏<br><br>
+                <span style="color:var(--muted);font-size:12px;">For support, contact your category coordinator.</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ══ BONUS BREAKDOWN POPUP ══ -->
+<div id="bonus-popup" class="modal-overlay hidden" onclick="if(event.target===this)closeBonusPopup()">
+    <div class="modal-box sm">
+        <button class="modal-close" onclick="closeBonusPopup()">×</button>
+        <div class="modal-title">🌟 Bonus Breakdown</div>
+        <div id="bonus-popup-content"></div>
+        <button onclick="closeBonusPopup()" class="btn-gray" style="margin-top:12px;">Close</button>
+    </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
