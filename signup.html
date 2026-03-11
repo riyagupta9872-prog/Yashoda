@@ -55,7 +55,7 @@
         <h2>🙏 Create Account</h2>
         <p class="subtitle">Fill in all details to get started</p>
 
-        <form id="signup-form">
+        <form id="signup-form" autocomplete="off">
 
             <!-- Account info -->
             <p class="section-label">Account</p>
@@ -66,7 +66,10 @@
             <input type="email" id="signup-email" placeholder="Enter your email" required>
 
             <label>Password</label>
-            <input type="password" id="signup-password" placeholder="Minimum 6 characters" minlength="6" required>
+            <div style="position:relative;">
+                <input type="password" id="signup-password" placeholder="Minimum 6 characters" minlength="6" required autocomplete="new-password" style="padding-right:42px;">
+                <button type="button" onclick="togglePwd('signup-password',this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;width:auto;margin:0;font-size:16px;color:#888;">👁</button>
+            </div>
 
             <!-- Profile info -->
             <hr class="section-divider">
@@ -114,6 +117,13 @@
 </div>
 
 <script>
+    function togglePwd(id, btn) {
+        const inp = document.getElementById(id);
+        if (!inp) return;
+        inp.type = inp.type === 'password' ? 'text' : 'password';
+        btn.textContent = inp.type === 'password' ? '👁' : '🙈';
+    }
+
     const firebaseConfig = {
         apiKey: "AIzaSyCZdmZJckSWJo1tFT14NVKVurUGsoKrRy8",
         authDomain: "rapd--sadhana-tracker.firebaseapp.com",
