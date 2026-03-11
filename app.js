@@ -28,10 +28,10 @@ const isAnyAdmin      = () => isSuperAdmin() || isDeptAdmin() || isTeamLeader();
 
 // Teams per department
 const DEPT_TEAMS = {
-    'IGF':      ['Lalita','Visakha','Chitralekha','Champakalata','Tungavidya','Indulekha','Rangadevi','Sudevi','Other','Overall'],
-    'IYF':      ['Anant','Govind','Madhav','Keshav','Overall'],
-    'ICF_MTG':  ['Rohini','Rukmini','Kalindi','Satyabhama','Jamvanti','Lakshmana','Kaushal','Bhadra','Other','Overall'],
-    'ICF_PRJI': ['Vasudev','Sankarshan','Anirudha','Pradyuman','Overall']
+    'IGF':      ['Lalita','Visakha','Chitralekha','Champakalata','Tungavidya','Indulekha','Rangadevi','Sudevi','Yashoda','Subhadra','Devaki'],
+    'IYF':      ['Anant','Govind','Madhav'],
+    'ICF_MTG':  ['Rukmini','Satyabhama','Jambavati','Kalindi','Mitravinda','Nagnajiti (Satya)','Bhadra','Lakshmana'],
+    'ICF_PRJI': ['Vasudev','Sankarshan','Anirudha','Pradyuman']
 };
 
 // Populate team dropdown based on dept
@@ -720,17 +720,13 @@ window.switchTab = (t) => {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
 
     // admin-reports, admin, inactive all use admin-panel with sub-sections
-    if (t === 'admin-reports' || t === 'admin' || t === 'inactive') {
+    if (t === 'admin-reports' || t === 'admin' || t === 'inactive' || t === 'adminmgmt') {
         const el = document.getElementById('admin-panel');
         if (el) el.classList.add('active');
-        // Load admin panel data if not yet loaded
-        if (!adminPanelLoaded) { adminPanelLoaded = true; loadAdminPanel(); }
-        const sectionMap = { 'admin-reports': 'reports', 'admin': 'usermgmt', 'inactive': 'inactive' };
-        const btnQuery   = { 'admin-reports': '.drawer-nav-item[onclick*="reports"]',
-                             'admin':         '.drawer-nav-item[onclick*="usermgmt"]',
-                             'inactive':      '.drawer-nav-item[onclick*="inactive"]' };
-        const subBtn = document.querySelector(btnQuery[t]);
-        selectAdminSection(sectionMap[t], subBtn);
+        if (t !== 'adminmgmt' && !adminPanelLoaded) { adminPanelLoaded = true; loadAdminPanel(); }
+        const sectionMap = { 'admin-reports': 'reports', 'admin': 'usermgmt', 'inactive': 'inactive', 'adminmgmt': 'adminmgmt' };
+        selectAdminSection(sectionMap[t], null);
+        if (t === 'adminmgmt') loadAdminMgmt();
     } else {
         const panel = document.getElementById(t + '-panel');
         if (panel) panel.classList.add('active');
@@ -1611,6 +1607,68 @@ async function loadAdminPanel() {
     });
 }
 
+// ── ADMIN MANAGEMENT ────────────────────────────────────────
+async function loadAdminMgmt() {
+    const container = document.getElementById('admin-mgmt-list');
+    if (!container) return;
+    container.innerHTML = '<p style="color:#aaa;text-align:center;padding:20px;">Loading…</p>';
+
+    const snap = await db.collection('users').get();
+    const admins = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(u => u.role === 'superAdmin' || u.role === 'deptAdmin' || u.role === 'teamLeader')
+        .sort((a,b) => {
+            const order = { superAdmin: 0, deptAdmin: 1, teamLeader: 2 };
+            return (order[a.role]||3) - (order[b.role]||3) || (a.name||'').localeCompare(b.name||'');
+        });
+
+    if (!admins.length) {
+        container.innerHTML = '<p style="color:#aaa;text-align:center;padding:20px;">No admins found.</p>';
+        return;
+    }
+
+    container.innerHTML = admins.map(u => {
+        const roleBadge = u.role === 'superAdmin'
+            ? '<span style="background:#7e22ce;color:white;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;">👑 Super Admin</span>'
+            : u.role === 'deptAdmin'
+            ? `<span style="background:#1a5276;color:white;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;">🛡️ Dept Admin — ${u.department||''}</span>`
+            : `<span style="background:#1e8449;color:white;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;">👥 Team Leader — ${u.team||''}</span>`;
+
+        // Role change dropdown — only superAdmin can change all; deptAdmin can change within dept
+        let roleOpts = '<option value="" disabled selected>Change Role…</option>';
+        if (isSuperAdmin()) {
+            if (u.role !== 'superAdmin') roleOpts += `<option value="superAdmin">👑 Make Super Admin</option>`;
+            ['IGF','IYF','ICF_MTG','ICF_PRJI'].forEach(dept => {
+                roleOpts += `<option value="deptAdmin:${dept}">🛡️ Dept Admin — ${dept}</option>`;
+                if (DEPT_TEAMS[dept]) DEPT_TEAMS[dept].forEach(team =>
+                    roleOpts += `<option value="teamLeader:${dept}:${team}">👥 Team Leader — ${team} (${dept})</option>`
+                );
+            });
+            roleOpts += '<option value="demote">🚫 Revoke to User</option>';
+        } else if (isDeptAdmin() && u.department === userProfile.department && u.role !== 'superAdmin') {
+            if (DEPT_TEAMS[userProfile.department]) DEPT_TEAMS[userProfile.department].forEach(team =>
+                roleOpts += `<option value="teamLeader:${userProfile.department}:${team}">👥 TL — ${team}</option>`
+            );
+            roleOpts += '<option value="demote">🚫 Revoke to User</option>';
+        }
+
+        const canChange = isSuperAdmin() || (isDeptAdmin() && u.department === userProfile.department && u.role !== 'superAdmin');
+        const safe = (u.name||'').replace(/'/g,"\'");
+
+        return `<div class="user-card">
+            <div class="user-card-top">
+                <span class="user-name">${u.name||'—'}</span>${roleBadge}
+                <div class="user-meta">${u.department||'-'} · ${u.team||'-'} · ${u.email||''}</div>
+            </div>
+            ${canChange ? `<div class="user-actions">
+                <select onchange="handleRoleDropdown('${u.id}',this)" style="padding:6px 10px;border-radius:8px;border:1px solid #ddd;font-size:12px;background:white;cursor:pointer;flex:1;min-width:180px;">
+                    ${roleOpts}
+                </select>
+            </div>` : ''}
+        </div>`;
+    }).join('');
+}
+
 window.handleLevelChange = async (uid, sel) => {
     const newLevel = sel.value; sel.value = '';
     if (!newLevel) return;
@@ -1884,14 +1942,12 @@ function setupDateSelect() {
     const s = document.getElementById('sadhana-date');
     if (!s) return;
     s.innerHTML = '';
-    // TEMP (1 week): 3 days — revert to i<2 and old textContent line after 1 week
-    for (let i=0;i<3;i++) {
+    for (let i=0;i<2;i++) {
         const ds = localDateStr(i);
         const opt = document.createElement('option');
         opt.value = ds;
         const parts = ds.split('-');
-        // OLD LINE (restore after 1 week): opt.textContent = parts[2] + '/' + parts[1] + '/' + parts[0] + (i===0 ? ' (Today)' : ' (Yesterday)');
-        opt.textContent = parts[2] + '/' + parts[1] + '/' + parts[0] + (i===0 ? ' (Today)' : i===1 ? ' (Yesterday)' : ' (2 days ago)');
+        opt.textContent = parts[2] + '/' + parts[1] + '/' + parts[0] + (i===0 ? ' (Today)' : ' (Yesterday)');
         s.appendChild(opt);
     }
     refreshFormFields();
