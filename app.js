@@ -1461,12 +1461,12 @@ async function loadAdminPanel() {
                     tot += en.score;
                     weekEnts.push({id:ds, sleepTime:en.sleepTime||'', score:en.score});
                 } else if (ds < todayComp) {
-                    tot += -35; // past day NR
+                    tot += -30; // past day NR (matches getNRData totalScore)
                 }
                 // today not submitted — skip (not in fd either)
                 curr.setDate(curr.getDate()+1);
             }
-            const fd = fairDenominator(w.sunStr, weekEnts);
+            const fd = fairDenominator(w.sunStr, weekEnts, u.level||'Level-1');
             const pct = Math.round((tot/fd)*100);
             const ps  = pctStyle(pct);
             const cellBg = ps.bg || stripeBg;
@@ -1738,7 +1738,7 @@ window.openEditModal = async (userId, date) => {
 
     // Fetch user's level for scoring context
     const uSnap   = await db.collection('users').doc(userId).get();
-    const uLevel  = uSnap.exists ? (uSnap.data().level || 'Senior Batch') : 'Senior Batch';
+    const uLevel  = uSnap.exists ? (uSnap.data().level || 'Level-4') : 'Level-4';
     document.getElementById('edit-user-level').value = uLevel;
 
     // Populate fields
@@ -1757,7 +1757,7 @@ window.openEditModal = async (userId, date) => {
     document.getElementById('edit-modal-title').textContent = `✏️ Edit Sadhana — ${uData.name||userId} · ${date}`;
 
     // Show/hide notes field based on level
-    document.getElementById('edit-notes-row').classList.toggle('hidden', uLevel !== 'Senior Batch');
+    document.getElementById('edit-notes-row').classList.toggle('hidden', uLevel !== 'Level-4');
 
     updateEditPreview();
     document.getElementById('edit-sadhana-modal').classList.remove('hidden');
@@ -1777,12 +1777,13 @@ window.updateEditPreview = () => {
     const sMin  = parseInt(document.getElementById('edit-service-mins').value)||0;
     const nMin  = parseInt(document.getElementById('edit-notes-mins').value)||0;
     const dsMin = parseInt(document.getElementById('edit-day-sleep-mins').value)||0;
-    const level = document.getElementById('edit-user-level').value || 'Senior Batch';
+    const level = document.getElementById('edit-user-level').value || 'Level-4';
 
     if (!slp || !wak || !chn) return;
     const { total, dayPercent } = calculateScores(slp, wak, chn, rMin, hMin, sMin, nMin, dsMin, level);
     const prev = document.getElementById('edit-score-preview');
-    prev.textContent = `New Score: ${total} / 160 (${dayPercent}%)`;
+    const editDMax = getDailyMax(level);
+    prev.textContent = `New Score: ${total} / ${editDMax} (${dayPercent}%)`;
     prev.style.color = total < 0 ? '#dc2626' : total < 80 ? '#d97706' : '#16a34a';
 };
 
@@ -1798,7 +1799,7 @@ window.submitEditSadhana = async () => {
     const nMin  = parseInt(document.getElementById('edit-notes-mins').value)||0;
     const dsMin = parseInt(document.getElementById('edit-day-sleep-mins').value)||0;
     const reason= document.getElementById('edit-reason').value.trim();
-    const level = document.getElementById('edit-user-level').value || 'Senior Batch';
+    const level = document.getElementById('edit-user-level').value || 'Level-4';
 
     if (!slp||!wak||!chn) { alert('Please fill all time fields.'); return; }
     if (!confirm(`Save changes to ${editModalDate}?\nThis will update scores and log edit history.`)) return;
@@ -2328,7 +2329,7 @@ window._sendRoleNotification = async (userId, userName, newRole, category) => {
     if (newRole === 'superAdmin') msg = 'You have been promoted to Super Admin!';
     else if (newRole === 'admin' && category) msg = `You have been made Admin — ${category.replace(' Coordinator','')}`;
     else if (newRole === 'user') msg = 'Your admin role has been updated.';
-    else if (newRole === 'sb') msg = 'You have been moved to Senior Batch.';
+    else if (newRole === 'sb') msg = 'You have been moved to Senior Batch (Level-4).'; // legacy
 
     if (msg) await sendInAppNotification(userId, '👑 Role Update', msg);
 };
