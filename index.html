@@ -660,120 +660,6 @@
             font-size: 13px; resize: vertical; min-height: 60px; font-family: inherit;
         }
 
-        /* ══ USER CARD MODAL ══ */
-        .user-card-detail {
-            max-width: 440px !important;
-            padding: 0 !important;
-        }
-        .user-card-header {
-            background: linear-gradient(135deg, #1A3C5E 0%, #2563a0 100%);
-            padding: 24px;
-            display: flex;
-            gap: 16px;
-            align-items: center;
-            border-radius: 12px 12px 0 0;
-        }
-        .user-card-avatar {
-            width: 64px;
-            height: 64px;
-            border-radius: 50%;
-            background: rgba(255,255,255,0.2);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-            font-weight: 700;
-            color: white;
-            border: 3px solid rgba(255,255,255,0.3);
-        }
-        .user-card-info {
-            flex: 1;
-        }
-        .user-card-name {
-            font-size: 18px;
-            font-weight: 700;
-            color: white;
-            margin-bottom: 4px;
-        }
-        .user-card-dept {
-            font-size: 13px;
-            color: rgba(255,255,255,0.9);
-            margin-bottom: 2px;
-        }
-        .user-card-level {
-            font-size: 12px;
-            color: rgba(255,255,255,0.7);
-        }
-        .user-card-stats {
-            display: flex;
-            padding: 20px;
-            gap: 16px;
-            border-bottom: 1px solid #e5e7eb;
-        }
-        .stat-item {
-            flex: 1;
-            text-align: center;
-        }
-        .stat-value {
-            font-size: 24px;
-            font-weight: 700;
-            color: #1A3C5E;
-            margin-bottom: 4px;
-        }
-        .stat-label {
-            font-size: 11px;
-            color: #6b7280;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        .user-card-actions {
-            padding: 16px;
-        }
-        .card-action-btn {
-            width: 100% !important;
-            display: flex;
-            align-items: center;
-            gap: 14px;
-            padding: 14px 16px !important;
-            background: #f9fafb;
-            border: 1px solid #e5e7eb;
-            border-radius: 10px;
-            margin-bottom: 10px !important;
-            cursor: pointer;
-            transition: all 0.2s;
-            text-align: left;
-        }
-        .card-action-btn:hover {
-            background: #f3f4f6;
-            border-color: #d1d5db;
-            transform: translateX(4px);
-        }
-        .card-action-btn.danger {
-            background: #fef2f2;
-            border-color: #fecaca;
-        }
-        .card-action-btn.danger:hover {
-            background: #fee2e2;
-            border-color: #fca5a5;
-        }
-        .action-icon {
-            font-size: 24px;
-            line-height: 1;
-        }
-        .action-text {
-            flex: 1;
-        }
-        .action-title {
-            font-size: 14px;
-            font-weight: 600;
-            color: #1f2937;
-            margin-bottom: 2px;
-        }
-        .action-desc {
-            font-size: 12px;
-            color: #6b7280;
-        }
-
     </style>
 <script>
 // Available immediately — before app.js loads
@@ -1931,138 +1817,71 @@ function closeUserGuide() {
     </div>
 </div>
 
-<!-- ══ BONUS BREAKDOWN POPUP ══ -->
+<!-- ══ MODAL: Devotee Profile (View Profile button) ══ -->
+<div id="devotee-profile-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeDevoteeProfile()">
+    <div class="modal-box" style="max-width:440px;padding:0;">
+        <!-- Header -->
+        <div style="background:linear-gradient(135deg,#1A3C5E 0%,#2563a0 100%);padding:22px 20px 18px;border-radius:12px 12px 0 0;position:relative;">
+            <button class="modal-close" onclick="closeDevoteeProfile()" style="color:rgba(255,255,255,0.7);top:10px;right:12px;">×</button>
+            <div style="display:flex;align-items:center;gap:14px;">
+                <div style="width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:white;border:2.5px solid rgba(255,255,255,0.35);flex-shrink:0;" id="dp-initials">RA</div>
+                <div>
+                    <div style="font-size:17px;font-weight:700;color:white;margin-bottom:3px;" id="dp-name">—</div>
+                    <div style="font-size:12px;font-weight:600;" id="dp-role-lbl">👤 User</div>
+                    <div style="font-size:11px;color:rgba(255,255,255,0.75);margin-top:2px;" id="dp-meta">—</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Info chips -->
+        <div style="display:flex;gap:8px;padding:14px 16px 8px;flex-wrap:wrap;">
+            <span style="background:#eff6ff;color:#1d4ed8;border-radius:20px;padding:4px 12px;font-size:12px;font-weight:600;">📊 <span id="dp-level">—</span></span>
+            <span style="background:#f0fdf4;color:#15803d;border-radius:20px;padding:4px 12px;font-size:12px;font-weight:600;">🎵 <span id="dp-instrument">—</span></span>
+        </div>
+
+        <!-- Action buttons -->
+        <div style="padding:8px 16px 4px;">
+            <button onclick="dpViewHistory()" style="width:100%;display:flex;align-items:center;gap:12px;padding:11px 14px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:9px;margin-bottom:7px;cursor:pointer;text-align:left;">
+                <span style="font-size:20px;">📋</span>
+                <div><div style="font-size:13px;font-weight:600;color:#1f2937;">View History</div><div style="font-size:11px;color:#6b7280;">4 weeks sadhana report</div></div>
+            </button>
+            <button onclick="dpDownloadExcel()" style="width:100%;display:flex;align-items:center;gap:12px;padding:11px 14px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:9px;margin-bottom:7px;cursor:pointer;text-align:left;">
+                <span style="font-size:20px;">📥</span>
+                <div><div style="font-size:13px;font-weight:600;color:#1f2937;">Download Excel</div><div style="font-size:11px;color:#6b7280;">Export all data</div></div>
+            </button>
+            <button onclick="dpViewProgress()" style="width:100%;display:flex;align-items:center;gap:12px;padding:11px 14px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:9px;margin-bottom:7px;cursor:pointer;text-align:left;">
+                <span style="font-size:20px;">📈</span>
+                <div><div style="font-size:13px;font-weight:600;color:#1f2937;">Progress Charts</div><div style="font-size:11px;color:#6b7280;">Visual analytics</div></div>
+            </button>
+        </div>
+
+        <!-- Role change section -->
+        <div id="dp-role-section" style="padding:4px 16px 8px;">
+            <div style="background:#f0f4ff;border-radius:9px;padding:12px 14px;">
+                <div style="font-size:12px;font-weight:700;color:#1A3C5E;margin-bottom:8px;">🔑 Change Role</div>
+                <select id="dp-role-select" onchange="dpChangeRole(this)" style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid #c7d2fe;font-size:13px;background:white;cursor:pointer;">
+                    <option value="" disabled selected>Change Role…</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Delete button -->
+        <div style="padding:4px 16px 16px;">
+            <button id="dp-delete-btn" onclick="dpDeleteUser()" style="width:100%;display:flex;align-items:center;gap:12px;padding:11px 14px;background:#fef2f2;border:1px solid #fecaca;border-radius:9px;cursor:pointer;text-align:left;">
+                <span style="font-size:20px;">🗑️</span>
+                <div><div style="font-size:13px;font-weight:600;color:#dc2626;">Remove User</div><div style="font-size:11px;color:#ef4444;">Permanently delete all data</div></div>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ══ MODAL: Bonus Breakdown Popup ══ -->
 <div id="bonus-popup" class="modal-overlay hidden" onclick="if(event.target===this)closeBonusPopup()">
     <div class="modal-box sm">
         <button class="modal-close" onclick="closeBonusPopup()">×</button>
         <div class="modal-title">🌟 Bonus Breakdown</div>
         <div id="bonus-popup-content"></div>
         <button onclick="closeBonusPopup()" class="btn-gray" style="margin-top:12px;">Close</button>
-    </div>
-</div>
-
-<!-- ══ REJECTION MODAL (SuperAdmin Only) ══ -->
-<div id="reject-modal" class="modal-overlay hidden">
-    <div class="modal-box sm">
-        <button class="modal-close" onclick="closeRejectModal()">×</button>
-        <div class="modal-title">🚫 Reject Sadhana Entry</div>
-        
-        <div style="background:#fff3cd;padding:12px;border-radius:6px;margin-bottom:15px;font-size:13px;">
-            <strong>⚠️ Warning:</strong> This action will:
-            <ul style="margin:8px 0 0 20px;padding:0;">
-                <li>Mark entry as REJECTED</li>
-                <li>Apply -50 penalty</li>
-                <li>Notify the user</li>
-                <li>Can be revoked later</li>
-            </ul>
-        </div>
-        
-        <p style="font-size:14px;margin-bottom:15px;">
-            <strong>User:</strong> <span id="reject-user-name"></span><br>
-            <strong>Date:</strong> <span id="reject-date"></span><br>
-            <strong>Current Score:</strong> <span id="reject-current-score"></span>
-        </p>
-        
-        <label class="form-label">Rejection Reason (Required):</label>
-        <textarea id="reject-reason" 
-            placeholder="Enter reason for rejection (e.g., Fraudulent entry, Impossible timings, etc.)" 
-            rows="3" 
-            style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:13px;font-family:inherit;"></textarea>
-        
-        <div style="background:#ffebee;padding:12px;border-radius:6px;margin:15px 0;font-size:13px;">
-            <strong>After Rejection:</strong><br>
-            Score: <span id="reject-current-score"></span> → <span style="color:red;font-weight:bold;">-50</span>
-        </div>
-        
-        <button onclick="confirmReject()" class="btn-danger">
-            🚫 Confirm Rejection
-        </button>
-        <button onclick="closeRejectModal()" class="btn-gray" style="margin-top:8px;">
-            Cancel
-        </button>
-    </div>
-</div>
-
-<!-- ══ USER CARD MODAL ══ -->
-<div id="user-card-modal" class="modal-overlay hidden">
-    <div class="modal-box user-card-detail">
-        <button class="modal-close" onclick="closeUserCard()">×</button>
-        
-        <div class="user-card-header">
-            <div class="user-card-avatar">
-                <span id="user-card-initials">RA</span>
-            </div>
-            <div class="user-card-info">
-                <div class="user-card-name" id="user-card-name">Ram Atipriya</div>
-                <div class="user-card-dept" id="user-card-dept">IGF • Lalita</div>
-                <div class="user-card-level" id="user-card-level">Level-4 (16 Rounds)</div>
-            </div>
-        </div>
-        
-        <div class="user-card-stats">
-            <div class="stat-item">
-                <div class="stat-value" id="user-card-avg">85%</div>
-                <div class="stat-label">Avg Score</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-value" id="user-card-streak">12</div>
-                <div class="stat-label">Days Streak</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-value" id="user-card-total">28</div>
-                <div class="stat-label">Total Entries</div>
-            </div>
-        </div>
-        
-        <div class="user-card-actions">
-            <button onclick="openUserHistoryFromCard()" class="card-action-btn">
-                <span class="action-icon">📊</span>
-                <div class="action-text">
-                    <div class="action-title">View History</div>
-                    <div class="action-desc">4 weeks report</div>
-                </div>
-            </button>
-            
-            <button onclick="downloadExcelFromCard()" class="card-action-btn">
-                <span class="action-icon">📥</span>
-                <div class="action-text">
-                    <div class="action-title">Download Excel</div>
-                    <div class="action-desc">Export all data</div>
-                </div>
-            </button>
-            
-            <button onclick="viewProgressFromCard()" class="card-action-btn">
-                <span class="action-icon">📈</span>
-                <div class="action-text">
-                    <div class="action-title">Progress Charts</div>
-                    <div class="action-desc">Visual analytics</div>
-                </div>
-            </button>
-            
-            <button onclick="openChangeRoleFromCard()" class="card-action-btn" id="change-role-card-btn">
-                <span class="action-icon">🔑</span>
-                <div class="action-text">
-                    <div class="action-title">Change Role</div>
-                    <div class="action-desc">Manage permissions</div>
-                </div>
-            </button>
-            
-            <button onclick="openRejectEntryFromCard()" class="card-action-btn" id="reject-card-btn" style="display:none;">
-                <span class="action-icon">🚫</span>
-                <div class="action-text">
-                    <div class="action-title">Reject Entry</div>
-                    <div class="action-desc">Mark as invalid</div>
-                </div>
-            </button>
-            
-            <button onclick="confirmRemoveUserFromCard()" class="card-action-btn danger" id="remove-user-card-btn">
-                <span class="action-icon">🗑️</span>
-                <div class="action-text">
-                    <div class="action-title">Remove User</div>
-                    <div class="action-desc">Delete all data</div>
-                </div>
-            </button>
-        </div>
     </div>
 </div>
 
