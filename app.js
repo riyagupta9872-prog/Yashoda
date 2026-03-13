@@ -13,6 +13,10 @@ const auth = firebase.auth();
 const db   = firebase.firestore();
 db.settings({ experimentalAutoDetectLongPolling: true, merge: true });
 
+let currentUser    = null;
+let userProfile    = null;
+let activeListener = null;
+
 // ═══════════════════════════════════════════════════════════
 // 2. ROLE HELPERS
 // ═══════════════════════════════════════════════════════════
