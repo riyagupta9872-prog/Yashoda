@@ -764,7 +764,7 @@ function closeUserGuide() {
             </select>
 
             <label class="form-label">Department</label>
-            <select id="profile-dept" required onchange="populateDeptTeams('profile-team', this.value)">
+            <select id="profile-dept" required>
                 <option value="" disabled selected>Select department</option>
                 <option value="IGF">IGF</option>
                 <option value="IYF">IYF</option>
@@ -774,7 +774,10 @@ function closeUserGuide() {
 
             <label class="form-label">Team</label>
             <select id="profile-team" required>
-                <option value="" disabled selected>Select team (choose dept first)</option>
+                <option value="" disabled selected>Select team</option>
+                <option value="Yashoda">Yashoda</option>
+                <option value="Devaki">Devaki</option>
+                <option value="Other">Other</option>
             </select>
 
             <button type="submit" class="btn-success" style="margin-top:16px;">Save &amp; Continue</button>
@@ -934,9 +937,9 @@ function closeUserGuide() {
                     </div>
                     <div class="card" style="overflow-x:auto;overflow-y:auto;max-height:70vh;">
                         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
-                            <select id="reports-filter-dept"  onchange="updateFilterTeams('reports')" style="margin:0;width:auto;flex-shrink:0;padding:8px 10px;font-size:12px;border-radius:8px;border:1px solid #ddd;"><option value="">All Depts</option><option value="IGF">IGF</option><option value="IYF">IYF</option><option value="ICF_MTG">ICF_MTG</option><option value="ICF_PRJI">ICF_PRJI</option></select>
+                            <select id="reports-filter-dept" style="display:none;"></select>
+                            <select id="reports-filter-team" onchange="filterReports()" style="margin:0;width:auto;flex-shrink:0;padding:8px 10px;font-size:12px;border-radius:8px;border:1px solid #ddd;"><option value="">All Teams</option><option value="Yashoda">Yashoda</option><option value="Devaki">Devaki</option><option value="Other">Other</option></select>
                             <select id="reports-filter-level" onchange="filterReports()" style="margin:0;width:auto;flex-shrink:0;padding:8px 10px;font-size:12px;border-radius:8px;border:1px solid #ddd;"><option value="">All Levels</option><option value="Level-1">Level-1</option><option value="Level-2">Level-2</option><option value="Level-3">Level-3</option><option value="Level-4">Level-4</option></select>
-                            <select id="reports-filter-team"  onchange="filterReports()" style="margin:0;width:auto;flex-shrink:0;padding:8px 10px;font-size:12px;border-radius:8px;border:1px solid #ddd;"><option value="">All Teams</option><option value="Anant">Anant</option><option value="Anirudha">Anirudha</option><option value="Bhadra">Bhadra</option><option value="Champakalata">Champakalata</option><option value="Chitralekha">Chitralekha</option><option value="Govind">Govind</option><option value="Indulekha">Indulekha</option><option value="Jamvanti">Jamvanti</option><option value="Janardhan">Janardhan</option><option value="Keshav">Keshav</option><option value="Kalindi">Kalindi</option><option value="Kaushal">Kaushal</option><option value="Lakshmana">Lakshmana</option><option value="Lalita">Lalita</option><option value="Madhav">Madhav</option><option value="Other">Other</option><option value="Pradyuman">Pradyuman</option><option value="Rangadevi">Rangadevi</option><option value="Rohini">Rohini</option><option value="Rukmini">Rukmini</option><option value="Sankarshan">Sankarshan</option><option value="Satyabhama">Satyabhama</option><option value="Sudevi">Sudevi</option><option value="Tungavidya">Tungavidya</option><option value="Vasudev">Vasudev</option><option value="Visakha">Visakha</option></select>
                         </div>
                         <div id="admin-comparative-reports-container"></div>
                     </div>
@@ -950,9 +953,9 @@ function closeUserGuide() {
                             <input type="text" id="admin-search-input" placeholder="Search by name..." oninput="filterAdminUsers()" style="margin:0;flex:1;">
                         </div>
                         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
-                            <select id="admin-filter-dept"  onchange="updateFilterTeams('admin')" style="margin:0;width:auto;flex-shrink:0;padding:8px 10px;font-size:12px;border-radius:8px;border:1px solid #ddd;"><option value="">All Depts</option><option value="IGF">IGF</option><option value="IYF">IYF</option><option value="ICF_MTG">ICF_MTG</option><option value="ICF_PRJI">ICF_PRJI</option></select>
+                            <select id="admin-filter-dept" style="display:none;"></select>
                             <select id="admin-filter-level" onchange="filterAdminUsers()" style="margin:0;width:auto;flex-shrink:0;padding:8px 10px;font-size:12px;border-radius:8px;border:1px solid #ddd;"><option value="">All Levels</option><option value="Level-1">Level-1</option><option value="Level-2">Level-2</option><option value="Level-3">Level-3</option><option value="Level-4">Level-4</option></select>
-                            <select id="admin-filter-team"  onchange="filterAdminUsers()" style="margin:0;width:auto;flex-shrink:0;padding:8px 10px;font-size:12px;border-radius:8px;border:1px solid #ddd;"><option value="">All Teams</option><option value="Anant">Anant</option><option value="Anirudha">Anirudha</option><option value="Bhadra">Bhadra</option><option value="Champakalata">Champakalata</option><option value="Chitralekha">Chitralekha</option><option value="Govind">Govind</option><option value="Indulekha">Indulekha</option><option value="Jamvanti">Jamvanti</option><option value="Janardhan">Janardhan</option><option value="Keshav">Keshav</option><option value="Kalindi">Kalindi</option><option value="Kaushal">Kaushal</option><option value="Lakshmana">Lakshmana</option><option value="Lalita">Lalita</option><option value="Madhav">Madhav</option><option value="Other">Other</option><option value="Pradyuman">Pradyuman</option><option value="Rangadevi">Rangadevi</option><option value="Rohini">Rohini</option><option value="Rukmini">Rukmini</option><option value="Sankarshan">Sankarshan</option><option value="Satyabhama">Satyabhama</option><option value="Sudevi">Sudevi</option><option value="Tungavidya">Tungavidya</option><option value="Vasudev">Vasudev</option><option value="Visakha">Visakha</option></select>
+                            <select id="admin-filter-team" onchange="filterAdminUsers()" style="margin:0;width:auto;flex-shrink:0;padding:8px 10px;font-size:12px;border-radius:8px;border:1px solid #ddd;"><option value="">All Teams</option><option value="Yashoda">Yashoda</option><option value="Devaki">Devaki</option><option value="Other">Other</option></select>
                         </div>
                         <div id="admin-users-list"></div>
                     </div>
@@ -962,9 +965,9 @@ function closeUserGuide() {
                 <div id="admin-sub-inactive" class="admin-sub-panel hidden">
                     <h3 style="margin:0 0 14px;color:var(--primary);font-size:15px;">&#9888; Inactive Devotees</h3>
                     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
-                            <select id="inactive-filter-dept"  onchange="updateFilterTeams('inactive')" style="margin:0;width:auto;flex-shrink:0;padding:8px 10px;font-size:12px;border-radius:8px;border:1px solid #ddd;"><option value="">All Depts</option><option value="IGF">IGF</option><option value="IYF">IYF</option><option value="ICF_MTG">ICF_MTG</option><option value="ICF_PRJI">ICF_PRJI</option></select>
+                            <select id="inactive-filter-dept" style="display:none;"></select>
                             <select id="inactive-filter-level" onchange="filterInactiveUsers()" style="margin:0;width:auto;flex-shrink:0;padding:8px 10px;font-size:12px;border-radius:8px;border:1px solid #ddd;"><option value="">All Levels</option><option value="Level-1">Level-1</option><option value="Level-2">Level-2</option><option value="Level-3">Level-3</option><option value="Level-4">Level-4</option></select>
-                            <select id="inactive-filter-team"  onchange="filterInactiveUsers()" style="margin:0;width:auto;flex-shrink:0;padding:8px 10px;font-size:12px;border-radius:8px;border:1px solid #ddd;"><option value="">All Teams</option><option value="Anant">Anant</option><option value="Anirudha">Anirudha</option><option value="Bhadra">Bhadra</option><option value="Champakalata">Champakalata</option><option value="Chitralekha">Chitralekha</option><option value="Govind">Govind</option><option value="Indulekha">Indulekha</option><option value="Jamvanti">Jamvanti</option><option value="Janardhan">Janardhan</option><option value="Keshav">Keshav</option><option value="Kalindi">Kalindi</option><option value="Kaushal">Kaushal</option><option value="Lakshmana">Lakshmana</option><option value="Lalita">Lalita</option><option value="Madhav">Madhav</option><option value="Other">Other</option><option value="Pradyuman">Pradyuman</option><option value="Rangadevi">Rangadevi</option><option value="Rohini">Rohini</option><option value="Rukmini">Rukmini</option><option value="Sankarshan">Sankarshan</option><option value="Satyabhama">Satyabhama</option><option value="Sudevi">Sudevi</option><option value="Tungavidya">Tungavidya</option><option value="Vasudev">Vasudev</option><option value="Visakha">Visakha</option></select>
+                            <select id="inactive-filter-team" onchange="filterInactiveUsers()" style="margin:0;width:auto;flex-shrink:0;padding:8px 10px;font-size:12px;border-radius:8px;border:1px solid #ddd;"><option value="">All Teams</option><option value="Yashoda">Yashoda</option><option value="Devaki">Devaki</option><option value="Other">Other</option></select>
                         </div>
                     <div id="admin-inactive-container"></div>
                 </div>
@@ -1227,7 +1230,7 @@ function closeUserGuide() {
                 </table>
                 <div class="guide-info-box" style="margin-top:10px;">
                     📌 New devotees start at <b>Level-1</b> by default.<br>
-                    📌 Level is changed by Team Leader / Dept Admin / Super Admin.
+                    📌 Level is changed by Team Leader / Super Admin.
                 </div>
             </div>
             <div class="guide-section">
@@ -1735,8 +1738,8 @@ function closeUserGuide() {
                 <h3>⚙️ Roles & Permissions</h3>
                 <table class="score-table">
                     <tr><th>Role</th><th>Can Do</th></tr>
-                    <tr><td style="font-weight:700;color:#7c3aed;">Super Admin</td><td>Full access — all depts, edit sadhana, change any role/level</td></tr>
-                    <tr><td style="font-weight:700;color:#1565C0;">Dept Admin</td><td>Own dept — change roles (teamLeader/user) and levels</td></tr>
+                    <tr><td style="font-weight:700;color:#7c3aed;">Super Admin</td><td>Full access — all teams, edit sadhana, change any role/level</td></tr>
+                    <tr><td style="font-weight:700;color:#1e8449;">Team Leader</td><td>Own team — view reports and levels</td></tr>
                     <tr><td style="font-weight:700;color:#2E7D32;">Team Leader</td><td>Own team — view history, progress, change level</td></tr>
                     <tr><td style="font-weight:700;">User</td><td>Own data only — fill sadhana, view reports</td></tr>
                 </table>
