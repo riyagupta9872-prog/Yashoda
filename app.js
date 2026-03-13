@@ -22,16 +22,18 @@ let activeListener = null;
 // 2. ROLE HELPERS
 // ═══════════════════════════════════════════════════════════
 const isSuperAdmin    = () => userProfile?.role === 'superAdmin';
-const isDeptAdmin     = () => userProfile?.role === 'deptAdmin';
+const isDeptAdmin     = () => false; // removed in Yashoda project
 const isTeamLeader    = () => userProfile?.role === 'teamLeader';
-const isAnyAdmin      = () => isSuperAdmin() || isDeptAdmin() || isTeamLeader();
+const isAnyAdmin      = () => isSuperAdmin() || isTeamLeader();
 
-// Teams per department
+// Teams — same for all departments
+const TEAMS = ['Yashoda', 'Devaki', 'Other'];
+
 const DEPT_TEAMS = {
-    'IGF':      ['Lalita','Visakha','Chitralekha','Champakalata','Tungavidya','Indulekha','Rangadevi','Sudevi','Other'],
-    'IYF':      ['Anant','Govind','Madhav','Keshav','Janardhan','Other'],
-    'ICF_MTG':  ['Rohini','Rukmini','Kalindi','Satyabhama','Jamvanti','Lakshmana','Kaushal','Bhadra','Other'],
-    'ICF_PRJI': ['Vasudev','Sankarshan','Anirudha','Pradyuman','Other']
+    'IGF':      ['Yashoda','Devaki','Other'],
+    'IYF':      ['Yashoda','Devaki','Other'],
+    'ICF_MTG':  ['Yashoda','Devaki','Other'],
+    'ICF_PRJI': ['Yashoda','Devaki','Other']
 };
 
 // Populate team dropdown based on dept
@@ -39,20 +41,17 @@ window.populateDeptTeams = (selectId, dept, selected = '') => {
     const sel = document.getElementById(selectId);
     if (!sel) return;
     sel.innerHTML = '<option value="" disabled selected>Select team</option>';
-    if (dept && DEPT_TEAMS[dept]) {
-        DEPT_TEAMS[dept].forEach(t => {
-            const o = document.createElement('option');
-            o.value = t; o.textContent = t;
-            if (t === selected) o.selected = true;
-            sel.appendChild(o);
-        });
-    }
+    TEAMS.forEach(t => {
+        const o = document.createElement('option');
+        o.value = t; o.textContent = t;
+        if (t === selected) o.selected = true;
+        sel.appendChild(o);
+    });
 };
 
 // What users this admin can see
 function getAdminScope() {
     if (isSuperAdmin()) return { type: 'all' };
-    if (isDeptAdmin())  return { type: 'dept', dept: userProfile.department };
     if (isTeamLeader()) return { type: 'team', dept: userProfile.department, team: userProfile.team };
     return { type: 'self' };
 }
@@ -61,7 +60,6 @@ function getAdminScope() {
 function matchesScope(uData) {
     const scope = getAdminScope();
     if (scope.type === 'all')  return true;
-    if (scope.type === 'dept') return uData.department === scope.dept;
     if (scope.type === 'team') return uData.team === scope.team;
     return false;
 }
@@ -69,7 +67,7 @@ function matchesScope(uData) {
 // For backward compatibility — level categories visible
 const visibleCategories = () => {
     if (isSuperAdmin()) return ['Level-1','Level-2','Level-3','Level-4'];
-    if (isDeptAdmin() || isTeamLeader()) return ['Level-1','Level-2','Level-3','Level-4'];
+    if (isTeamLeader()) return ['Level-1','Level-2','Level-3','Level-4'];
     return [];
 };
 
@@ -649,8 +647,12 @@ auth.onAuthStateChanged((user) => {
             const prevLevel = userProfile ? userProfile.level : null;
             userProfile = docSnap.data();
 
+            // Admins skip profile form — go straight to dashboard
+            const role = userProfile.role || 'user';
+            const isAdmin = role === 'superAdmin' || role === 'teamLeader';
+
             // Sirf name, department, team zaroori hain — level default Level-1 hoga
-            if (!userProfile.name || !userProfile.department || !userProfile.team) {
+            if (!isAdmin && (!userProfile.name || !userProfile.department || !userProfile.team)) {
                 document.getElementById('profile-title').textContent    = 'Complete Your Profile';
                 document.getElementById('profile-subtitle').textContent = 'Please fill in your details to continue';
                 document.getElementById('profile-name').value           = userProfile.name || '';
@@ -676,7 +678,6 @@ auth.onAuthStateChanged((user) => {
 
 function initDashboard() {
     const roleLabel = isSuperAdmin()  ? '👑 Super Admin'
-                    : isDeptAdmin()   ? `🛡️ Dept Admin — ${userProfile.department||''}`
                     : isTeamLeader()  ? `👥 Team Leader — ${userProfile.team||''}`
                     : `${userProfile.level||'Level-1'} | ${userProfile.department||''} | ${userProfile.team||''}`;
     document.getElementById('user-display-name').textContent = userProfile.name;
@@ -1361,7 +1362,7 @@ async function loadAdminPanel() {
         .filter(doc => {
             const d = doc.data();
             // Exclude all admins — only show regular users in reports/management
-            if (d.role === 'superAdmin' || d.role === 'deptAdmin' || d.role === 'teamLeader') return false;
+            if (d.role === 'superAdmin' || d.role === 'teamLeader') return false;
             return matchesScope(d);
         })
         .sort((a,b) => (a.data().name||'').localeCompare(b.data().name||''));
@@ -1390,9 +1391,7 @@ async function loadAdminPanel() {
     banner.className = `info-banner ${isSuperAdmin()?'banner-purple':'banner-blue'}`;
     const scope = getAdminScope();
     banner.innerHTML = isSuperAdmin()
-        ? '👑 <strong>Super Admin</strong> — All departments, full role management'
-        : isDeptAdmin()
-        ? `🛡️ <strong>Dept Admin</strong> — Department: <strong>${userProfile.department||''}</strong>`
+        ? '👑 <strong>Super Admin</strong> — All teams, full role management'
         : `👥 <strong>Team Leader</strong> — Team: <strong>${userProfile.team||''}</strong>`;
     usersList.appendChild(banner);
 
@@ -1481,7 +1480,6 @@ async function loadAdminPanel() {
 
         let badge = '';
         if (u.role==='superAdmin')  badge=`<span class="role-badge" style="background:#7e22ce;color:white;">👑 Super Admin</span>`;
-        else if (u.role==='deptAdmin') badge=`<span class="role-badge" style="background:#1a5276;color:white;">🛡️ Dept Admin (${u.department||''})</span>`;
         else if (u.role==='teamLeader') badge=`<span class="role-badge" style="background:#1e8449;color:white;">👥 Team Leader (${u.team||''})</span>`;
 
         const safe = (u.name||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
@@ -1585,9 +1583,9 @@ async function loadAdminMgmt() {
     const snap = await db.collection('users').get();
     const admins = snap.docs
         .map(d => ({ id: d.id, ...d.data() }))
-        .filter(u => u.role === 'superAdmin' || u.role === 'deptAdmin' || u.role === 'teamLeader')
+        .filter(u => u.role === 'superAdmin' || u.role === 'teamLeader')
         .sort((a,b) => {
-            const order = { superAdmin: 0, deptAdmin: 1, teamLeader: 2 };
+            const order = { superAdmin: 0, teamLeader: 1 };
             return (order[a.role]||3) - (order[b.role]||3) || (a.name||'').localeCompare(b.name||'');
         });
 
@@ -1599,29 +1597,21 @@ async function loadAdminMgmt() {
     container.innerHTML = admins.map(u => {
         const roleBadge = u.role === 'superAdmin'
             ? '<span style="background:#7e22ce;color:white;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;">👑 Super Admin</span>'
-            : u.role === 'deptAdmin'
-            ? `<span style="background:#1a5276;color:white;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;">🛡️ Dept Admin — ${u.department||''}</span>`
             : `<span style="background:#1e8449;color:white;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;">👥 Team Leader — ${u.team||''}</span>`;
 
-        // Role change dropdown — only superAdmin can change all; deptAdmin can change within dept
+        // Role change dropdown — only superAdmin can change roles
         let roleOpts = '<option value="" disabled selected>Change Role…</option>';
         if (isSuperAdmin()) {
             if (u.role !== 'superAdmin') roleOpts += `<option value="superAdmin">👑 Make Super Admin</option>`;
             ['IGF','IYF','ICF_MTG','ICF_PRJI'].forEach(dept => {
-                roleOpts += `<option value="deptAdmin:${dept}">🛡️ Dept Admin — ${dept}</option>`;
-                if (DEPT_TEAMS[dept]) DEPT_TEAMS[dept].forEach(team =>
+                TEAMS.forEach(team =>
                     roleOpts += `<option value="teamLeader:${dept}:${team}">👥 Team Leader — ${team} (${dept})</option>`
                 );
             });
             roleOpts += '<option value="demote">🚫 Revoke to User</option>';
-        } else if (isDeptAdmin() && u.department === userProfile.department && u.role !== 'superAdmin') {
-            if (DEPT_TEAMS[userProfile.department]) DEPT_TEAMS[userProfile.department].forEach(team =>
-                roleOpts += `<option value="teamLeader:${userProfile.department}:${team}">👥 TL — ${team}</option>`
-            );
-            roleOpts += '<option value="demote">🚫 Revoke to User</option>';
         }
 
-        const canChange = isSuperAdmin() || (isDeptAdmin() && u.department === userProfile.department && u.role !== 'superAdmin');
+        const canChange = isSuperAdmin();
         const safe = (u.name||'').replace(/'/g,"\'");
 
         return `<div class="user-card">
@@ -1654,11 +1644,7 @@ window.handleRoleDropdown = async (uid, sel) => {
 
     if (val === 'superAdmin') {
         newRole = 'superAdmin';
-        msg = '👑 Make this user SUPER ADMIN?\nFull access to all departments.';
-    } else if (val.startsWith('deptAdmin:')) {
-        newRole = 'deptAdmin';
-        dept    = val.split(':')[1];
-        msg     = `🛡️ Assign as Dept Admin for: ${dept}?`;
+        msg = '👑 Make this user SUPER ADMIN?\nFull access to all teams.';
     } else if (val.startsWith('teamLeader:')) {
         const parts = val.split(':');
         newRole = 'teamLeader';
@@ -1921,29 +1907,22 @@ window.openDevoteeProfile = async (userId, userName) => {
 
     // Role badge
     const roleLbl = u.role==='superAdmin' ? '👑 Super Admin'
-        : u.role==='deptAdmin'  ? `🛡️ Dept Admin — ${u.department||''}`
         : u.role==='teamLeader' ? `👥 Team Leader — ${u.team||''}`
         : '👤 User';
-    const roleColor = u.role==='superAdmin'?'#7e22ce':u.role==='deptAdmin'?'#1a5276':u.role==='teamLeader'?'#1e8449':'#374151';
+    const roleColor = u.role==='superAdmin'?'#7e22ce':u.role==='teamLeader'?'#1e8449':'#374151';
 
     // Build role change dropdown options
     let roleOpts = '<option value="" disabled selected>Change Role…</option>';
     if (isSuperAdmin()) {
         if (u.role !== 'superAdmin') roleOpts += `<option value="superAdmin">👑 Make Super Admin</option>`;
         ['IGF','IYF','ICF_MTG','ICF_PRJI'].forEach(dept => {
-            roleOpts += `<option value="deptAdmin:${dept}">🛡️ Dept Admin — ${dept}</option>`;
-            if (DEPT_TEAMS[dept]) DEPT_TEAMS[dept].forEach(team =>
+            TEAMS.forEach(team =>
                 roleOpts += `<option value="teamLeader:${dept}:${team}">👥 TL — ${team} (${dept})</option>`
             );
         });
         roleOpts += '<option value="demote">🚫 Revoke to User</option>';
-    } else if (isDeptAdmin() && u.department === userProfile.department && u.role !== 'superAdmin') {
-        if (DEPT_TEAMS[userProfile.department]) DEPT_TEAMS[userProfile.department].forEach(team =>
-            roleOpts += `<option value="teamLeader:${userProfile.department}:${team}">👥 TL — ${team}</option>`
-        );
-        roleOpts += '<option value="demote">🚫 Revoke to User</option>';
     }
-    const canChangeRole = isSuperAdmin() || (isDeptAdmin() && u.department === userProfile.department && u.role !== 'superAdmin');
+    const canChangeRole = isSuperAdmin();
     const canDelete = isSuperAdmin();
 
     document.getElementById('dp-initials').textContent = initials;
@@ -2062,7 +2041,7 @@ window.toggleRejectEntry = async (userId, dateStr, isCurrentlyRejected) => {
         // REJECT
         const reason = prompt(`🚫 Reject entry for ${dateStr}?\n\nEnter reason (required):`);
         if (!reason?.trim()) { showToast('Rejection cancelled — reason required', 'warn'); return; }
-        if (!confirm(`Apply −50 penalty and reject this entry?\nReason: ${reason}`)) return;
+        if (!confirm(`Apply −30 penalty and reject this entry?\nReason: ${reason}`)) return;
         try {
             const docSnap = await db.collection('users').doc(userId).collection('sadhana').doc(dateStr).get();
             const d = docSnap.data();
@@ -2073,8 +2052,8 @@ window.toggleRejectEntry = async (userId, dateStr, isCurrentlyRejected) => {
                 rejectionReason: reason.trim(),
                 originalTotalScore: d.totalScore ?? 0,
                 originalDayPercent: d.dayPercent ?? 0,
-                totalScore: -50,
-                dayPercent: -31
+                totalScore: -30,
+                dayPercent: -19
             });
             showToast('🚫 Entry rejected!', 'success');
         } catch(err) { showToast('❌ ' + err.message, 'error'); }
@@ -2261,7 +2240,7 @@ window.openProfileEdit = () => {
 
     const deptSel = document.getElementById('profile-dept');
     if (deptSel) deptSel.value = userProfile.department || '';
-    populateDeptTeams('profile-team', userProfile.department || '', userProfile.team || '');
+    populateDeptTeams('profile-team', '', userProfile.team || '');
     populateInstrumentOptions(userProfile.level || 'Level-1');
     const instrSel = document.getElementById('profile-instrument');
     if (instrSel) instrSel.value = userProfile.instrument || '';
@@ -2491,7 +2470,6 @@ window.openUserSidebar = () => {
         const r = document.getElementById('sidebar-user-role');
         if (n) n.textContent = userProfile.name || '';
         if (r) r.textContent = userProfile.role === 'superAdmin' ? '👑 Super Admin'
-            : userProfile.role === 'deptAdmin' ? `🛡️ Dept Admin — ${userProfile.department||''}`
             : userProfile.role === 'teamLeader' ? `👥 Team Leader — ${userProfile.team||''}`
             : `${userProfile.level||'Level-1'} | ${userProfile.department||''} | ${userProfile.team||''}`;
     }
