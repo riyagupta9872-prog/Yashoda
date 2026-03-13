@@ -1,22 +1,17 @@
 // ═══════════════════════════════════════════════════════════
 // 1. FIREBASE SETUP
 // ═══════════════════════════════════════════════════════════
-const firebaseConfig = {
-    apiKey: "AIzaSyCZdmZJckSWJo1tFT14NVKVurUGsoKrRy8",
-    authDomain: "rapd--sadhana-tracker.firebaseapp.com",
-    projectId: "rapd--sadhana-tracker",
-    storageBucket: "rapd--sadhana-tracker.firebasestorage.app",
-    messagingSenderId: "811405448950",
-    appId: "1:811405448950:web:8b711f3129e4bdf06dbed7"
+const firebaseConfig = {apiKey: "AIzaSyDtLp6VU9KnfYt1Agv8L5gL68ZxRzfxodg",
+  authDomain: "yashoda-sadhana-tracker.firebaseapp.com",
+  projectId: "yashoda-sadhana-tracker",
+  storageBucket: "yashoda-sadhana-tracker.firebasestorage.app",
+  messagingSenderId: "919046799313",
+  appId: "1:919046799313:web:8d68c028ff21a4dfbe6af0"
 };
 if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db   = firebase.firestore();
 db.settings({ experimentalAutoDetectLongPolling: true, merge: true });
-
-let currentUser    = null;
-let userProfile    = null;
-let activeListener = null;
 
 // ═══════════════════════════════════════════════════════════
 // 2. ROLE HELPERS
