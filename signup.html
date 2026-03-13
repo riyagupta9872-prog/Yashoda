@@ -78,7 +78,7 @@
 <p style="font-size:12px;color:#888;margin:8px 0 4px;">Your level will be assigned by your Admin after signup.</p>
 
             <label>Department</label>
-            <select id="signup-dept" required onchange="populateDeptTeams('signup-team', this.value)">
+            <select id="signup-dept" required>
                 <option value="" disabled selected>Select department</option>
                 <option value="IGF">IGF</option>
                 <option value="IYF">IYF</option>
@@ -88,7 +88,10 @@
 
             <label>Team</label>
             <select id="signup-team" required>
-                <option value="" disabled selected>Select team (choose dept first)</option>
+                <option value="" disabled selected>Select team</option>
+                <option value="Yashoda">Yashoda</option>
+                <option value="Devaki">Devaki</option>
+                <option value="Other">Other</option>
             </select>
 
             <label>Chanting Category</label>
@@ -136,25 +139,7 @@
     const auth = firebase.auth();
     const db   = firebase.firestore();
 
-    const DEPT_TEAMS = {
-        'IGF':      ['Lalita','Visakha','Chitralekha','Champakalata','Tungavidya','Indulekha','Rangadevi','Sudevi','Other'],
-        'IYF':      ['Anant','Govind','Madhav','Keshav','Janardhan','Other'],
-        'ICF_MTG':  ['Rohini','Rukmini','Kalindi','Satyabhama','Jamvanti','Lakshmana','Kaushal','Bhadra','Other'],
-        'ICF_PRJI': ['Vasudev','Sankarshan','Anirudha','Pradyuman','Other']
-    };
-    function populateDeptTeams(selectId, dept, selected = '') {
-        const sel = document.getElementById(selectId);
-        if (!sel) return;
-        sel.innerHTML = '<option value="" disabled selected>Select team</option>';
-        if (dept && DEPT_TEAMS[dept]) {
-            DEPT_TEAMS[dept].forEach(t => {
-                const o = document.createElement('option');
-                o.value = t; o.textContent = t;
-                if (t === selected) o.selected = true;
-                sel.appendChild(o);
-            });
-        }
-    }
+    const TEAMS = ['Yashoda', 'Devaki', 'Other'];
 
     document.getElementById('signup-form').onsubmit = async (e) => {
         e.preventDefault();
