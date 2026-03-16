@@ -91,6 +91,7 @@
                 <option value="" disabled selected>Select team</option>
                 <option value="Yashoda">Yashoda</option>
                 <option value="Devaki">Devaki</option>
+                <option value="Balarama">Balarama</option>
                 <option value="Other">Other</option>
             </select>
 
@@ -139,7 +140,7 @@ if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db   = firebase.firestore();
 
-    const TEAMS = ['Yashoda', 'Devaki', 'Other'];
+    const TEAMS = ['Yashoda', 'Devaki', 'Balarama' , 'Other'];
 
     document.getElementById('signup-form').onsubmit = async (e) => {
         e.preventDefault();
