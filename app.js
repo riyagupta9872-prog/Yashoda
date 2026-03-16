@@ -26,13 +26,13 @@ const isTeamLeader    = () => userProfile?.role === 'teamLeader';
 const isAnyAdmin      = () => isSuperAdmin() || isTeamLeader();
 
 // Teams — same for all departments
-const TEAMS = ['Yashoda', 'Devaki', 'Other'];
+const TEAMS = ['Yashoda', 'Devaki', 'Balarama', 'Other'];
 
 const DEPT_TEAMS = {
-    'IGF':      ['Yashoda','Devaki','Other'],
-    'IYF':      ['Yashoda','Devaki','Other'],
-    'ICF_MTG':  ['Yashoda','Devaki','Other'],
-    'ICF_PRJI': ['Yashoda','Devaki','Other']
+    'IGF':      ['Yashoda','Devaki','Balarama','Other'],
+    'IYF':      ['Yashoda','Devaki','Balarama','Other'],
+    'ICF_MTG':  ['Yashoda','Devaki','Balarama','Other'],
+    'ICF_PRJI': ['Yashoda','Devaki','Balarama','Other']
 };
 
 // Populate team dropdown based on dept
@@ -897,6 +897,11 @@ function loadReports(userId, containerId) {
                     const wkTotal = wk.total + svcScore + weekBonus;
                     const wkPct   = Math.round((wkTotal / wkFD) * 100);
                     const wkColor = wkTotal < 0 ? '#dc2626' : wkPct < 30 ? '#d97706' : '#16a34a';
+                    // Weekly pass/fail badge — 40% criteria
+                    const wkPass      = wkPct >= 40;
+                    const wkPfBadge   = wkPass
+                        ? `<span style="display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;background:#dcfce7;color:#15803d;white-space:nowrap;">✓ Pass</span>`
+                        : `<span style="display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;background:#fee2e2;color:#dc2626;white-space:nowrap;">✗ Fail</span>`;
                     const div     = document.createElement('div'); div.className='week-card';
                     const bodyId  = containerId.replace(/[^a-zA-Z0-9]/g,'') + '-wb-' + wi.sunStr;
 
@@ -963,8 +968,17 @@ function loadReports(userId, containerId) {
                         // Service — minutes only, no marks (weekly pool)
                         const svcMins = e.serviceMinutes||0;
 
+                        // Pass/Fail badge — 40% is pass criteria
+                        const entryPct   = isNR ? -19 : (e.dayPercent ?? 0);
+                        const dayPass    = !isNR && entryPct >= 40;
+                        const pfBadge    = isNR
+                            ? `<span style="display:inline-block;padding:1px 7px;border-radius:20px;font-size:10px;font-weight:700;background:#fee2e2;color:#991b1b;white-space:nowrap;">NR</span>`
+                            : dayPass
+                                ? `<span style="display:inline-block;padding:1px 7px;border-radius:20px;font-size:10px;font-weight:700;background:#dcfce7;color:#15803d;white-space:nowrap;">✓ Pass</span>`
+                                : `<span style="display:inline-block;padding:1px 7px;border-radius:20px;font-size:10px;font-weight:700;background:#fee2e2;color:#dc2626;white-space:nowrap;">✗ Fail</span>`;
+
                         return `<tr style="background:${rowBg};">
-                            <td style="font-weight:600;">${e.id.split('-').slice(1).reverse().join('/')}${editedBadge}</td>
+                            <td style="font-weight:600;white-space:nowrap;">${pfBadge}<br>${e.id.split('-').slice(1).reverse().join('/')}${editedBadge}</td>
                             <td style="${isNR?'color:#b91c1c;font-weight:700;':''}">${e.sleepTime||'NR'}</td>${mkS(sc.sleep??0)}
                             <td style="${isNR?'color:#b91c1c;':''}">${e.wakeupTime||'NR'}</td>${mkS(sc.wakeup??0)}
                             <td>${e.chantingTime||'NR'}</td>${mkS(sc.chanting??0)}
@@ -988,6 +1002,7 @@ function loadReports(userId, containerId) {
                             <span style="white-space:nowrap;">📅 ${wk.range.replace('_',' ')}</span>
                             <span style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;">
                                 <span style="font-size:11px;color:#6b7280;white-space:nowrap;">🛠️ ${svcTotal}min→${svcScore>=0?'+':''}${svcScore}</span>
+                                ${wkPfBadge}
                                 <strong style="white-space:nowrap;color:${wkColor}">${wkTotal} / ${wkFD} (${wkPct}%) ▼</strong>
                             </span>
                         </div>
