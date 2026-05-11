@@ -78,7 +78,7 @@
 <p style="font-size:12px;color:#888;margin:8px 0 4px;">Your level will be assigned by your Admin after signup.</p>
 
             <label>Department</label>
-            <select id="signup-dept" required>
+            <select id="signup-dept" required onchange="populateDeptTeams('signup-team', this.value)">
                 <option value="" disabled selected>Select department</option>
                 <option value="IGF">IGF</option>
                 <option value="IYF">IYF</option>
@@ -88,19 +88,15 @@
 
             <label>Team</label>
             <select id="signup-team" required>
-                <option value="" disabled selected>Select team</option>
-                <option value="Yashoda">Yashoda</option>
-                <option value="Devaki">Devaki</option>
-                <option value="Balarama">Balarama</option>
-                <option value="Other">Other</option>
+                <option value="" disabled selected>Select team (choose dept first)</option>
             </select>
 
             <label>Chanting Category</label>
             <select id="signup-chanting" required>
                 <option value="" disabled selected>Select chanting category</option>
                 <option value="0-4 rounds">0-4 Rounds</option>
-                <option value="4-8 rounds">4-8 Rounds</option>
-                <option value="8-16 rounds">8-16 Rounds</option>
+                <option value="5-8 rounds">5-8 Rounds</option>
+                <option value="9-16 rounds">9-16 Rounds</option>
                 <option value="16+ rounds">16+ Rounds</option>
             </select>
 
@@ -129,18 +125,36 @@
     }
 
     const firebaseConfig = {
-  apiKey: "AIzaSyDtLp6VU9KnfYt1Agv8L5gL68ZxRzfxodg",
-  authDomain: "yashoda-sadhana-tracker.firebaseapp.com",
-  projectId: "yashoda-sadhana-tracker",
-  storageBucket: "yashoda-sadhana-tracker.firebasestorage.app",
-  messagingSenderId: "919046799313",
-  appId: "1:919046799313:web:8d68c028ff21a4dfbe6af0"
-};
-if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-const db   = firebase.firestore();
+        apiKey: "AIzaSyDtLp6VU9KnfYt1Agv8L5gL68ZxRzfxodg",
+        authDomain: "yashoda-sadhana-tracker.firebaseapp.com",
+        projectId: "yashoda-sadhana-tracker",
+        storageBucket: "yashoda-sadhana-tracker.firebasestorage.app",
+        messagingSenderId: "919046799313",
+        appId: "1:919046799313:web:8d68c028ff21a4dfbe6af0"
+    };
+    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db   = firebase.firestore();
 
-    const TEAMS = ['Yashoda', 'Devaki', 'Balarama' , 'Other'];
+    const DEPT_TEAMS = {
+    'IGF':      ['Yashoda','Devaki','Balarama','Other'],
+    'IYF':      ['Yashoda','Devaki','Balarama','Other'],
+    'ICF_MTG':  ['Yashoda','Devaki','Balarama','Other'],
+    'ICF_PRJI': ['Yashoda','Devaki','Balarama','Other']
+};
+    function populateDeptTeams(selectId, dept, selected = '') {
+        const sel = document.getElementById(selectId);
+        if (!sel) return;
+        sel.innerHTML = '<option value="" disabled selected>Select team</option>';
+        if (dept && DEPT_TEAMS[dept]) {
+            DEPT_TEAMS[dept].forEach(t => {
+                const o = document.createElement('option');
+                o.value = t; o.textContent = t;
+                if (t === selected) o.selected = true;
+                sel.appendChild(o);
+            });
+        }
+    }
 
     document.getElementById('signup-form').onsubmit = async (e) => {
         e.preventDefault();
@@ -174,7 +188,8 @@ const db   = firebase.firestore();
                 team,
                 chantingCategory: chanting,
                 exactRounds:      rounds,
-                role:             'user'
+                role:             'user',
+                joinedDate:       new Date().toISOString().split('T')[0]
             });
 
             // 3. Success — redirect to app
@@ -186,9 +201,17 @@ const db   = firebase.firestore();
             setTimeout(() => { window.location.href = 'index.html'; }, 1600);
 
         } catch (err) {
+            const friendly = {
+                'auth/email-already-in-use':   '❌ An account with this email already exists. Try logging in instead.',
+                'auth/invalid-email':          '❌ The email address is not valid. Please check and try again.',
+                'auth/weak-password':          '❌ Password is too weak. Please use at least 6 characters.',
+                'auth/too-many-requests':      '❌ Too many attempts. Please wait a few minutes and try again.',
+                'auth/network-request-failed': '❌ No internet connection. Please check your network and try again.',
+                'auth/operation-not-allowed':  '❌ Sign-up is currently disabled. Please contact your coordinator.',
+            };
             msg.className     = 'msg error';
             msg.style.display = 'block';
-            msg.textContent   = err.message;
+            msg.textContent   = friendly[err.code] || ('❌ ' + (err.message || 'Something went wrong. Please try again.'));
             btn.disabled      = false;
             btn.textContent   = 'Create Account & Start →';
         }

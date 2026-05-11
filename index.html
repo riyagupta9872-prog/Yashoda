@@ -14,7 +14,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         :root {
@@ -27,6 +27,116 @@
         .container { max-width: 1000px; margin: 0 auto; padding: 16px; }
         .hidden { display: none !important; }
         .card { background: var(--white); padding: 22px; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.07); margin-bottom: 18px; }
+
+        /* ── Avatars ── */
+        .av { width:36px;height:36px;border-radius:50%;background:#dbeafe;border:2px solid #3498db;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0; }
+        .av img { width:100%;height:100%;object-fit:cover;border-radius:50%; }
+        .av-init { font-size:13px;font-weight:700;color:#1A3C5E; }
+
+        /* ── User Action Bottom Sheet ── */
+        .uac-overlay { position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1100; }
+        .uac-sheet { position:fixed;bottom:-100%;left:0;right:0;max-width:600px;margin:0 auto;background:white;border-radius:20px 20px 0 0;z-index:1101;transition:bottom 0.3s ease;max-height:85vh;overflow-y:auto;box-shadow:0 -4px 30px rgba(0,0,0,0.15); }
+        .uac-sheet.open { bottom:0; }
+        .uac-handle { width:36px;height:4px;background:#e0e0e0;border-radius:2px;margin:12px auto 4px; }
+        .uac-head { padding:12px 20px 14px;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;align-items:flex-start; }
+        .uac-hname { font-size:17px;font-weight:800;color:#1a252f; }
+        .uac-hsub { font-size:12px;color:#888;margin-top:2px; }
+        .uac-x { background:none;border:none;font-size:22px;color:#aaa;cursor:pointer;width:auto;padding:0;margin:0; }
+        .uac-body { padding:10px 14px 28px;display:grid;grid-template-columns:1fr 1fr;gap:8px; }
+        #uac-activity-wrap { display:contents; }
+        .uac-body .uac-fullwidth { grid-column:1/-1; }
+        .uac-btn { display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 8px;border:none;border-radius:12px;background:#f8fafc;font-size:13px;font-weight:600;color:#1a252f;cursor:pointer;text-align:center;border:1px solid var(--border);width:auto;margin:0; }
+        .uac-btn:active { background:#f4f7f6; }
+        .uac-btn:hover { transform:none; }
+        .uac-ico { width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0; }
+        .uac-btn.danger { color:#dc2626; }
+        .uac-divider { border:none;border-top:1px solid #f0f0f0;margin:8px 0; }
+        .uac-role-label { font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;margin:8px 0 6px; }
+        .uac-role-sel { width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:14px;background:white;cursor:pointer;margin:0; }
+
+        /* ── Activity Analysis ── */
+        .aa-donut-wrap { position:relative;width:130px;height:130px;flex-shrink:0; }
+        .aa-bar-wrap { position:relative;height:240px; }
+
+        /* ── Bottom Navigation ── */
+        .bottom-nav { display:none;position:fixed;bottom:0;left:0;right:0;height:60px;background:#ffffff;border-top:1px solid var(--border);box-shadow:0 -2px 12px rgba(0,0,0,0.07);z-index:200;justify-content:space-around;align-items:stretch;padding-bottom:env(safe-area-inset-bottom); }
+        .bottom-nav.visible { display:flex; }
+        .bnav-item { display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;flex:1;padding:6px 2px;cursor:pointer;border:none;background:none;color:#6b7280;transition:color 0.2s;font-size:10px;font-weight:600;-webkit-tap-highlight-color:transparent;margin:0;width:auto;border-radius:0; }
+        .bnav-icon { font-size:20px;line-height:1;transition:transform 0.25s cubic-bezier(0.34,1.56,0.64,1);display:block; }
+        .bnav-item.active { color:var(--secondary); }
+        .bnav-item.active .bnav-icon { transform:translateY(-2px) scale(1.12); }
+        .bnav-item:active .bnav-icon { transform:scale(0.85); }
+        .bnav-item:hover { transform:none;opacity:1; }
+        body.has-bottom-nav { padding-bottom:70px; }
+        body.has-bottom-nav #main-nav-tabs { display:none !important; }
+
+        /* ── Submit Success Overlay ── */
+        .ss-overlay { position:fixed;inset:0;background:rgba(30,58,95,0.6);backdrop-filter:blur(6px);z-index:1200;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity 0.3s; }
+        .ss-overlay.visible { opacity:1;pointer-events:all; }
+        .ss-card { background:white;border-radius:24px;padding:40px 36px;text-align:center;max-width:400px;width:92%;box-shadow:0 8px 40px rgba(0,0,0,0.2); }
+        .ss-overlay.visible .ss-card { animation:successCardIn 0.4s cubic-bezier(0.34,1.56,0.64,1) both; }
+        @keyframes successCardIn { from { opacity:0;transform:scale(0.82) translateY(24px); } to { opacity:1;transform:scale(1) translateY(0); } }
+        .ss-bar-track { height:8px;background:#e5e7eb;border-radius:4px;overflow:hidden;margin:12px 0; }
+        .ss-bar { height:100%;background:linear-gradient(90deg,var(--secondary),#1A3C5E);border-radius:4px;width:0;transition:width 0.8s ease; }
+
+        /* ── Panel & Modal animations ── */
+        .tab-panel.active { animation:panelIn 0.28s cubic-bezier(0.22,1,0.36,1) both; }
+        @keyframes panelIn { from { opacity:0;transform:translateY(12px); } to { opacity:1;transform:translateY(0); } }
+        .modal-overlay:not(.hidden) .modal-box { animation:modalIn 0.22s cubic-bezier(0.34,1.56,0.64,1) both; }
+        @keyframes modalIn { from { opacity:0;transform:scale(0.92) translateY(10px); } to { opacity:1;transform:scale(1) translateY(0); } }
+
+        /* ── Sub-tabs ── */
+        .subtab-bar { display:flex;gap:0;margin-bottom:14px;background:#f0f4f8;border-radius:10px;padding:3px; }
+        .subtab-btn { flex:1;padding:8px 0;border:none;background:none;font-size:12px;font-weight:600;color:#6b7280;border-radius:8px;cursor:pointer;margin:0;width:auto; }
+        .subtab-btn:hover { transform:none; }
+        .subtab-btn.active { background:white;color:#1A3C5E;box-shadow:0 1px 4px rgba(0,0,0,0.08); }
+        .subtab-panel { display:none; }
+        .subtab-panel.active { display:block; }
+
+        /* ── Leaderboard ── */
+        .lb-row { display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:10px;margin-bottom:8px;background:#f8fafd;border:1px solid var(--border);transition:background 0.1s; }
+        .lb-row:hover { background:#f0f6ff; }
+        .lb-row.lb-self { background:#eff6ff;border-color:#bfdbfe; }
+        .lb-rank { font-size:18px;width:28px;text-align:center;flex-shrink:0; }
+        .lb-name { flex:1;font-weight:600;font-size:13px;color:#1a252f;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+        .lb-score-wrap { text-align:right;flex-shrink:0; }
+        .lb-score { font-weight:800;font-size:15px; }
+        .lb-pct { font-size:11px;color:#6b7280; }
+
+        /* ── Home stat chips ── */
+        .home-stat-row { display:flex;gap:8px;margin-top:10px; }
+        .home-stat-chip { flex:1;background:#f0f4f9;border-radius:10px;padding:8px 10px;text-align:center; }
+        .home-stat-chip .hsv { font-size:18px;font-weight:800;color:#1A3C5E;display:block;line-height:1.1; }
+        .home-stat-chip .hsl { font-size:10px;color:#6b7280;font-weight:500; }
+
+        /* ── Streak dots ── */
+        .streak-dots-row { display:flex;justify-content:space-evenly;margin-top:14px;padding-top:12px;border-top:1px solid var(--border); }
+        .streak-day-wrap { display:flex;flex-direction:column;align-items:center;gap:4px;animation:streakPop 0.3s cubic-bezier(0.34,1.56,0.64,1) both; }
+        .streak-dot { width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;border:2px solid #e5e7eb;color:#9ca3af; }
+        .streak-dot.filled { background:#dcfce7;border-color:#16a34a;color:#15803d; }
+        .streak-dot.filled::after { content:'\2713'; }
+        .streak-dot.missed { background:#fee2e2;border-color:#dc2626;color:#dc2626;font-size:10px; }
+        .streak-dot.today { border-color:#3498db;color:#3498db; }
+        .streak-dot-label { font-size:10px;color:#6b7280;font-weight:600; }
+        @keyframes streakPop { from { opacity:0;transform:scale(0.5) translateY(4px); } to { opacity:1;transform:scale(1) translateY(0); } }
+
+        /* ── Home fill alert ── */
+        .home-fill-alert { border-left:4px solid var(--warning) !important;background:#fffbeb !important;border-radius:10px;padding:16px;margin-bottom:12px; }
+
+        /* ── Home activity bars ── */
+        .home-act-bar { height:8px;background:#dbeafe;border-radius:99px;overflow:hidden;flex:1; }
+        .home-act-fill { height:100%;border-radius:99px;transition:width 0.7s cubic-bezier(0.22,1,0.36,1); }
+
+        /* ── Leaderboard ── */
+        @keyframes podiumRise { from { opacity:0;transform:translateY(60px) scale(0.7); } to { opacity:1;transform:translateY(0) scale(1); } }
+        @keyframes lbRowIn { from { opacity:0;transform:translateX(-10px); } to { opacity:1;transform:translateX(0); } }
+        .lb-row { animation:lbRowIn 0.28s cubic-bezier(0.22,1,0.36,1) both; }
+        @keyframes confettiBurst { 0% { opacity:1;transform:scale(0); } 50% { opacity:1;transform:scale(1.4); } 100% { opacity:0;transform:scale(1.8) translateY(-20px); } }
+
+        /* ── Header icon button ── */
+        .header-icon-btn { width:36px;height:36px;min-width:36px;border:none;border-radius:9px;background:#f0f4f8;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;position:relative;flex-shrink:0;padding:0;margin:0;color:#1A3C5E;transition:background 0.2s;width:auto; }
+        .header-icon-btn:hover { background:#dde4ed;transform:none; }
+        .header-badge { position:absolute;top:-3px;right:-3px;background:#dc2626;color:white;font-size:9px;padding:1px 5px;border-radius:99px;font-weight:700;line-height:1.3; }
 
         /* Inputs */
         input, select { width: 100%; padding: 11px 13px; margin: 5px 0; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; background: white; }
@@ -172,7 +282,22 @@
             letter-spacing: 0.5px;
         }
 
-        /* ── USER GUIDE MODAL ── */
+        /* ── AM/PM TIME PICKER ── */
+        .time-picker-row {
+            display: flex; gap: 5px; margin: 5px 0;
+        }
+        .time-picker-row select {
+            flex: 1; padding: 10px 6px; margin: 0;
+            border: 1px solid #ddd; border-radius: 8px;
+            font-size: 14px; background: white;
+            text-align: center; cursor: pointer;
+        }
+        .time-picker-row select:focus {
+            outline: none; border-color: var(--secondary);
+            box-shadow: 0 0 0 3px rgba(52,152,219,0.1);
+        }
+        .tp-ampm { max-width: 68px !important; font-weight: 700; color: #1A3C5E; }
+
         .guide-section { margin-bottom: 20px; }
         .guide-section h3 { font-size: 14px; font-weight: 700; color: #1A3C5E; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 2px solid #e0e7ff; }
         .guide-row { display: flex; gap: 8px; margin-bottom: 6px; font-size: 13px; }
@@ -217,9 +342,9 @@
         .data-table th, .data-table td { border: 1px solid #e0e0e0; padding: 7px 9px; text-align: center; white-space: nowrap; }
         .data-table th { background: #f8f9fa; font-weight: 600; font-size: 11px;
             position: sticky; top: 0; z-index: 3; }
-        .data-table td:first-child { text-align: left; font-weight: 500;
-            position: sticky; left: 0; z-index: 2; background: white; }
-        .data-table th:first-child { position: sticky; left: 0; top: 0; z-index: 4; background: #f8f9fa; }
+        .data-table td:first-child { text-align: left; font-weight: 600;
+            position: sticky; left: 0; z-index: 2; background: inherit; box-shadow: 2px 0 4px rgba(0,0,0,0.06); }
+        .data-table th:first-child { position: sticky; left: 0; top: 0; z-index: 4; background: #f8f9fa; box-shadow: 2px 0 4px rgba(0,0,0,0.06); }
 
         /* Modals */
         .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.72); display: flex; justify-content: center; align-items: center; z-index: 999; padding: 16px; }
@@ -303,6 +428,7 @@
             left: 0;
             z-index: 5;
             background: #1A3C5E;
+            box-shadow: 2px 0 4px rgba(0,0,0,0.1);
         }
         .comp-td {
             padding: 9px 12px;
@@ -311,6 +437,10 @@
             white-space: nowrap;
             font-size: 13px;
         }
+        .comp-th.col-highlight { background:#2563ab !important;box-shadow:inset 0 -3px 0 #fbbf24; }
+        .comp-td.col-highlight { background:#eff6ff !important;box-shadow:inset 2px 0 0 #3b82f6,inset -2px 0 0 #3b82f6; }
+        @keyframes colPulse { 0%,100% { opacity:1; } 50% { opacity:0.7; } }
+        .col-highlight { animation:colPulse 0.8s ease-in-out 2; }
         .comp-name {
             text-align: left;
             font-weight: 700;
@@ -319,6 +449,7 @@
             left: 0;
             z-index: 2;
             background: white;
+            box-shadow: 2px 0 4px rgba(0,0,0,0.06);
         }
         .comp-meta {
             font-size: 12px;
@@ -725,11 +856,22 @@ function closeUserGuide() {
                 <input type="password" id="login-password" placeholder="Password" required autocomplete="current-password" style="padding-right:42px;">
                 <button type="button" onclick="togglePwd('login-password',this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;width:auto;margin:0;font-size:16px;color:#888;">👁</button>
             </div>
-            <button type="submit" class="btn-primary" style="margin-top:10px;">Login</button>
+            <button type="submit" id="login-btn" class="btn-primary" style="margin-top:10px;">Login</button>
         </form>
+        <div id="login-msg" style="display:none;margin-top:12px;padding:10px 14px;border-radius:8px;font-size:13px;font-weight:600;text-align:center;"></div>
         <p style="text-align:center;margin-top:12px;">
             <a href="#" onclick="openForgotPassword(event)" style="color:var(--secondary);font-size:13px;text-decoration:none;">Forgot Password?</a>
         </p>
+        <!-- Forgot password inline panel -->
+        <div id="forgot-panel" style="display:none;margin-top:14px;background:#f0f4ff;border:1px solid #c7d9ff;border-radius:10px;padding:14px 16px;">
+            <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#1A3C5E;">🔐 Reset Password</p>
+            <input type="email" id="forgot-email" placeholder="Enter your email address" style="margin-bottom:8px;padding:9px 12px;border:1px solid #c7d9ff;border-radius:7px;font-size:13px;width:100%;">
+            <div style="display:flex;gap:8px;">
+                <button id="forgot-send-btn" onclick="sendForgotEmail()" style="flex:1;padding:9px;border:none;border-radius:7px;background:#1A3C5E;color:white;font-size:13px;font-weight:600;cursor:pointer;margin:0;">Send Reset Link</button>
+                <button onclick="closeForgotPanel()" style="padding:9px 14px;border:none;border-radius:7px;background:#e5e7eb;color:#374151;font-size:13px;font-weight:600;cursor:pointer;margin:0;">Cancel</button>
+            </div>
+            <div id="forgot-msg" style="display:none;margin-top:10px;padding:8px 12px;border-radius:7px;font-size:12px;font-weight:600;text-align:center;"></div>
+        </div>
         <p style="text-align:center;margin-top:14px;font-size:13px;color:var(--muted);">
             New here? <a href="signup.html" style="color:var(--secondary);font-weight:600;">Sign Up</a>
         </p>
@@ -740,6 +882,15 @@ function closeUserGuide() {
         <h2 id="profile-title" style="color:var(--primary);margin-bottom:4px;">Complete Your Profile</h2>
         <p id="profile-subtitle" style="color:var(--muted);font-size:13px;margin-bottom:20px;">Tell us about yourself to get started</p>
         <form id="profile-form">
+            <!-- Profile Picture Upload -->
+            <div style="text-align:center;margin-bottom:16px;">
+                <div style="width:72px;height:72px;border-radius:50%;background:#dbeafe;border:2px solid #3498db;display:flex;align-items:center;justify-content:center;overflow:hidden;margin:0 auto 10px;">
+                    <img id="profile-pic-preview" src="" alt="" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:50%;">
+                    <span id="profile-pic-init" style="font-size:22px;font-weight:700;color:#1A3C5E;"></span>
+                </div>
+                <label for="profile-pic-input" style="cursor:pointer;background:#f1f5f9;border:1px solid #ddd;padding:6px 16px;border-radius:20px;font-size:13px;font-weight:600;color:#374151;display:inline-block;">📷 Change Photo</label>
+                <input type="file" id="profile-pic-input" accept="image/*" style="display:none;" onchange="handleProfilePicSelect(this)">
+            </div>
             <label class="form-label">Full Name</label>
             <input type="text" id="profile-name" placeholder="Full Name" required>
 
@@ -747,8 +898,8 @@ function closeUserGuide() {
             <select id="profile-chanting" required>
                 <option value="" disabled selected>Select chanting category</option>
                 <option value="0-4 rounds">0-4 Rounds</option>
-                <option value="4-8 rounds">4-8 Rounds</option>
-                <option value="8-16 rounds">8-16 Rounds</option>
+                <option value="5-8 rounds">5-8 Rounds</option>
+                <option value="9-16 rounds">9-16 Rounds</option>
                 <option value="16+ rounds">16+ Rounds</option>
             </select>
 
@@ -764,7 +915,7 @@ function closeUserGuide() {
             </select>
 
             <label class="form-label">Department</label>
-            <select id="profile-dept" required>
+            <select id="profile-dept" required onchange="populateDeptTeams('profile-team', this.value)">
                 <option value="" disabled selected>Select department</option>
                 <option value="IGF">IGF</option>
                 <option value="IYF">IYF</option>
@@ -774,11 +925,7 @@ function closeUserGuide() {
 
             <label class="form-label">Team</label>
             <select id="profile-team" required>
-                <option value="" disabled selected>Select team</option>
-                <option value="Yashoda">Yashoda</option>
-                <option value="Devaki">Devaki</option>
-                <option value="Balarama">Balarama</option>
-                <option value="Other">Other</option>
+                <option value="" disabled selected>Select team (choose dept first)</option>
             </select>
 
             <button type="submit" class="btn-success" style="margin-top:16px;">Save &amp; Continue</button>
@@ -795,15 +942,20 @@ function closeUserGuide() {
         <div class="app-header" style="margin-bottom:12px;">
             <!-- Left: user hamburger + admin btn -->
             <div style="display:flex;gap:7px;align-items:center;">
-                <button class="user-menu-btn" onclick="openUserSidebar()" title="Menu">&#9776;</button>
-                
+                <div class="av" id="header-av" style="cursor:pointer;" onclick="openUserSidebar()">
+                    <img id="header-av-img" src="" alt="" style="display:none;">
+                    <span class="av-init" id="header-av-init"></span>
+                </div>
             </div>
             <!-- Center: name + role -->
             <div style="flex:1;padding:0 10px;">
                 <div class="header-name" id="user-display-name"></div>
                 <div class="header-role" id="user-role-display"></div>
             </div>
-            <!-- Right: logout only -->
+            <!-- Right: tasks bell + logout -->
+            <button class="header-icon-btn" onclick="switchTab('home')" title="Tasks" id="header-tasks-btn">
+                📢<span class="header-badge hidden" id="header-tasks-badge">0</span>
+            </button>
             <button id="logout-btn" class="btn-danger btn-sm">Logout</button>
         </div>
 
@@ -819,12 +971,23 @@ function closeUserGuide() {
             </div>
         </div>
 
-        <!-- NAV TABS -->
+        <!-- INSTALL APP BANNER -->
+        <div id="install-banner" class="hidden" style="display:none;align-items:center;gap:10px;padding:10px 14px;margin-bottom:12px;background:linear-gradient(135deg,#1A3C5E,#2563a0);border-radius:10px;color:white;box-shadow:0 2px 8px rgba(0,0,0,0.12);">
+            <span style="font-size:22px;">📲</span>
+            <div style="flex:1;">
+                <div style="font-size:13px;font-weight:700;">Install Sadhana Tracker</div>
+                <div style="font-size:11px;opacity:0.8;">Get quick access from your home screen</div>
+            </div>
+            <button onclick="installApp()" style="width:auto;padding:7px 16px;background:white;color:#1A3C5E;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;margin:0;white-space:nowrap;">Install</button>
+            <button onclick="dismissInstallBanner()" style="width:auto;padding:4px 8px;background:none;border:none;color:rgba(255,255,255,0.6);font-size:18px;cursor:pointer;margin:0;">✕</button>
+        </div>
+
+        <!-- NAV TABS (hidden by bottom nav) -->
         <div class="nav-tabs" id="main-nav-tabs" style="margin-bottom:16px;">
             <!-- User tabs -->
-            <button class="tab-btn user-tab active" onclick="switchTab('sadhana')">Daily Entry</button>
-            <button class="tab-btn user-tab"        onclick="switchTab('reports')">My Reports</button>
-            <button class="tab-btn user-tab"        onclick="switchTab('progress')">My Progress</button>
+            <button class="tab-btn user-tab active" onclick="switchTab('home')">Home</button>
+            <button class="tab-btn user-tab"        onclick="switchTab('mysadhana')">Sadhana</button>
+            <button class="tab-btn user-tab"        onclick="switchTab('team')">Team</button>
             <!-- Admin tabs -->
             <button class="tab-btn admin-tab hidden" onclick="switchTab('admin-reports')">WCR</button>
             <button class="tab-btn admin-tab hidden" onclick="switchTab('admin')">Individual Reports</button>
@@ -832,21 +995,77 @@ function closeUserGuide() {
             <button class="tab-btn admin-tab hidden" onclick="switchTab('adminmgmt')">Admin Management</button>
         </div>
 
-        <!-- SADHANA ENTRY -->
-        <div id="sadhana-panel" class="tab-panel active">
+        <!-- ══ HOME PANEL ══ -->
+        <div id="home-panel" class="tab-panel active">
+            <div class="chart-tabs" id="home-week-tabs" style="margin-bottom:12px;">
+                <button class="chart-tab-btn active" onclick="switchHomeWeek(0,this)">This Week</button>
+                <button class="chart-tab-btn" onclick="switchHomeWeek(1,this)">Last Week</button>
+            </div>
+            <div id="home-fill-alert" class="card home-fill-alert hidden">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+                    <span style="font-size:24px;">⚠️</span>
+                    <span style="font-weight:700;color:#92400e;font-size:13px;">Today's sadhana not yet filled!<br><span style="font-weight:400;font-size:11px;color:#a16207;">(aaj ki sadhana abhi bhari nahi hai)</span></span>
+                </div>
+                <button onclick="switchTab('mysadhana');switchSadhanaTab('entry')" class="btn-primary" style="width:100%;padding:12px;font-size:14px;">📝 Fill Today's Sadhana →</button>
+            </div>
+            <div class="card" style="padding:18px;">
+                <div style="display:flex;align-items:center;gap:16px;">
+                    <div style="position:relative;width:120px;height:120px;flex-shrink:0;">
+                        <canvas id="home-ring-canvas" width="120" height="120"></canvas>
+                        <div id="home-ring-pct" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                            <span style="font-size:24px;font-weight:800;color:#1A3C5E;">0%</span>
+                            <span style="font-size:10px;color:#6b7280;">week score</span>
+                        </div>
+                    </div>
+                    <div style="flex:1;">
+                        <div class="home-stat-row">
+                            <div class="home-stat-chip"><span class="hsv" id="home-week-pts">0</span><span class="hsl">Points</span></div>
+                            <div class="home-stat-chip"><span class="hsv" id="home-days-count">0</span><span class="hsl">Days Filled</span></div>
+                        </div>
+                        <div class="home-stat-row" style="margin-top:8px;">
+                            <div class="home-stat-chip"><span class="hsv" id="home-streak-count">0</span><span class="hsl">🔥 Streak</span></div>
+                        </div>
+                    </div>
+                </div>
+                <div id="home-streak-dots" class="streak-dots-row"></div>
+            </div>
+            <div class="card" style="padding:14px;margin-top:12px;">
+                <div style="font-size:13px;font-weight:700;color:#1A3C5E;margin-bottom:10px;">Activity Breakdown</div>
+                <div id="home-activity-bars"></div>
+            </div>
+            <div id="home-tasks-area" style="margin-top:14px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                    <h4 style="margin:0;color:#1A3C5E;font-size:14px;">Tasks & Announcements</h4>
+                </div>
+                <div id="tasks-container"></div>
+            </div>
+        </div>
+
+        <!-- ══ MY SADHANA PANEL (sub-tabs) ══ -->
+        <div id="mysadhana-panel" class="tab-panel">
+            <div class="subtab-bar">
+                <button class="subtab-btn active" onclick="switchSadhanaTab('entry',this)">Entry</button>
+                <button class="subtab-btn" onclick="switchSadhanaTab('reports',this)">My Reports</button>
+                <button class="subtab-btn" onclick="switchSadhanaTab('progress',this)">My Progress</button>
+            </div>
+            <div id="sadhana-entry-sub" class="subtab-panel active">
+            <!-- SADHANA ENTRY FORM -->
             <div class="card">
                 <form id="sadhana-form">
                     <label class="form-label">Date</label>
                     <select id="sadhana-date" required></select>
 
                     <label class="form-label">Bed Time (Previous Night)</label>
-                    <input type="time" id="sleep-time" required>
+                    <div class="time-picker-row" id="sleep-time-picker"></div>
+                    <input type="hidden" id="sleep-time">
 
                     <label class="form-label">Wake Up Time</label>
-                    <input type="time" id="wakeup-time" required>
+                    <div class="time-picker-row" id="wakeup-time-picker"></div>
+                    <input type="hidden" id="wakeup-time">
 
                     <label class="form-label">Chanting Completed By</label>
-                    <input type="time" id="chanting-time" required>
+                    <div class="time-picker-row" id="chanting-time-picker"></div>
+                    <input type="hidden" id="chanting-time">
 
                     <label class="form-label">📖 Pathan (Reading) — Minutes</label>
                     <input type="number" id="reading-mins" value="0" min="0" required>
@@ -899,29 +1118,67 @@ function closeUserGuide() {
                     <button type="submit" class="btn-success" style="margin-top:16px;">Submit Sadhana</button>
                 </form>
             </div>
-        </div>
-
-        <!-- MY REPORTS -->
-        <div id="reports-panel" class="tab-panel">
-            <div style="margin-bottom:14px;">
-                <button onclick="downloadUserExcel(currentUser.uid, userProfile.name)" class="btn-success btn-sm" style="width:auto;padding:9px 20px;">
-                    Download My History (Excel)
-                </button>
-            </div>
-            <div id="weekly-reports-container"></div>
-        </div>
-
-        <!-- MY PROGRESS CHARTS -->
-        <div id="progress-panel" class="tab-panel">
-            <div class="card">
-                <h3 style="margin:0 0 14px;color:var(--primary);font-size:16px;">My Progress</h3>
-                <div class="chart-tabs">
-                    <button class="chart-tab-btn active" onclick="setChartView('daily', this)">Daily</button>
-                    <button class="chart-tab-btn"        onclick="setChartView('weekly', this)">Weekly</button>
-                    <button class="chart-tab-btn"        onclick="setChartView('monthly', this)">Monthly</button>
+            </div><!-- /sadhana-entry-sub -->
+            <div id="sadhana-reports-sub" class="subtab-panel">
+                <div style="margin-bottom:14px;">
+                    <button onclick="downloadUserExcel(currentUser.uid, userProfile.name)" class="btn-success btn-sm" style="width:auto;padding:9px 20px;">
+                        Download My History (Excel)
+                    </button>
                 </div>
-                <div class="chart-container"><canvas id="my-progress-chart"></canvas></div>
-                <p style="font-size:11px;color:var(--muted);text-align:center;margin-top:8px;">Daily max: 160 · Weekly max: 1120</p>
+                <div id="weekly-reports-container"></div>
+            </div>
+            <div id="sadhana-progress-sub" class="subtab-panel">
+                <div class="card">
+                    <h3 style="margin:0 0 14px;color:var(--primary);font-size:16px;">My Progress</h3>
+                    <div class="chart-tabs">
+                        <button class="chart-tab-btn active" onclick="setChartView('daily', this)">Daily</button>
+                        <button class="chart-tab-btn"        onclick="setChartView('weekly', this)">Weekly</button>
+                        <button class="chart-tab-btn"        onclick="setChartView('monthly', this)">Monthly</button>
+                    </div>
+                    <div class="chart-container"><canvas id="my-progress-chart"></canvas></div>
+                </div>
+            </div>
+        </div><!-- /mysadhana-panel -->
+
+        <!-- ══ TEAM PANEL (sub-tabs) ══ -->
+        <div id="team-panel" class="tab-panel">
+            <div class="subtab-bar">
+                <button class="subtab-btn active" onclick="switchTeamTab('rankings',this)">Rankings</button>
+                <button class="subtab-btn" onclick="switchTeamTab('wcr',this)">WCR</button>
+            </div>
+            <div id="team-wcr-sub" class="subtab-panel">
+                <div id="perf-section" style="margin-bottom:16px;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+                        <h4 style="margin:0;color:#1A3C5E;font-size:14px;">⭐ Best & Weak Performers</h4>
+                        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                            <select id="perf-year-sel" onchange="onPerfYearChange()" style="width:auto;padding:5px 8px;font-size:11px;border-radius:6px;border:1px solid #ddd;margin:0;"></select>
+                            <select id="perf-month-sel" onchange="onPerfMonthChange()" style="width:auto;padding:5px 8px;font-size:11px;border-radius:6px;border:1px solid #ddd;margin:0;"></select>
+                            <select id="perf-week-sel" onchange="onPerfWeekChange()" style="width:auto;padding:5px 8px;font-size:11px;border-radius:6px;border:1px solid #ddd;margin:0;"></select>
+                            <button class="chart-tab-btn active perf-tab-btn" onclick="setPerfTab('weekly',this)">Weekly</button>
+                            <button class="chart-tab-btn perf-tab-btn" onclick="setPerfTab('monthly',this)">Monthly</button>
+                        </div>
+                    </div>
+                    <div id="perf-charts"></div>
+                </div>
+                <div class="card" style="overflow-x:auto;overflow-y:auto;max-height:75vh;">
+                    <h3 style="margin:0 0 14px;color:var(--primary);font-size:16px;">🏆 Department Performance (WCR)</h3>
+                    <div id="user-wcr-container"><p style="color:#aaa;text-align:center;padding:20px;">Loading…</p></div>
+                </div>
+            </div>
+            <div id="team-rankings-sub" class="subtab-panel active">
+                <div class="chart-tabs" id="lb-mode-tabs" style="margin-bottom:12px;">
+                    <button class="chart-tab-btn" onclick="setLBMode('daily',this)">Yesterday</button>
+                    <button class="chart-tab-btn active" onclick="setLBMode('weekly',this)">This Week</button>
+                    <button class="chart-tab-btn" onclick="setLBMode('lastweek',this)">Last Week</button>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
+                    <select id="lb-filter-level" onchange="filterUserLB()" style="margin:0;width:auto;flex-shrink:0;padding:8px 10px;font-size:12px;border-radius:8px;border:1px solid #ddd;">
+                        <option value="">All Levels</option><option value="Level-1">Level-1</option><option value="Level-2">Level-2</option><option value="Level-3">Level-3</option><option value="Level-4">Level-4</option>
+                    </select>
+                </div>
+                <div id="lb-info" style="font-size:12px;color:#6b7280;margin-bottom:8px;"></div>
+                <div id="lb-podium" style="display:flex;justify-content:center;align-items:flex-start;gap:16px;margin:16px 0;min-height:160px;"></div>
+                <div id="leaderboard-container"></div>
             </div>
         </div>
 
@@ -930,17 +1187,67 @@ function closeUserGuide() {
 
             <!-- Content area -->
             <div id="admin-content-area">
-                <!-- Default: Reports -->
+
+                <!-- SA HOME DASHBOARD -->
+                <div id="admin-sub-home" class="admin-sub-panel active">
+                    <!-- Total count + week toggle -->
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                        <div><span style="font-size:28px;font-weight:800;color:#1A3C5E;" id="sa-total-users">0</span> <span style="font-size:14px;color:#6b7280;">Total Devotees</span></div>
+                        <div class="chart-tabs" id="sa-home-week-tabs" style="margin:0;">
+                            <button class="chart-tab-btn active" onclick="switchSAHomeWeek(0,this)">This Week</button>
+                            <button class="chart-tab-btn" onclick="switchSAHomeWeek(1,this)">Last Week</button>
+                        </div>
+                    </div>
+                    <!-- Dept filter pills with counts -->
+                    <div id="sa-home-dept-pills" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;"></div>
+                    <!-- Fill table -->
+                    <div class="card" style="padding:0;overflow-x:auto;overflow-y:auto;max-height:65vh;">
+                        <div id="sa-fill-table"></div>
+                    </div>
+                    <!-- Quick action -->
+                    <div style="display:flex;gap:8px;margin-top:12px;">
+                        <button onclick="switchTab('adminmgmt')" class="btn-gray btn-sm" style="flex:1;padding:10px;">⚙️ Admin Mgmt</button>
+                    </div>
+                </div>
+
+                <!-- TASKS -->
+                <div id="admin-sub-tasks" class="admin-sub-panel hidden">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+                        <h3 style="margin:0;color:var(--primary);font-size:16px;">📋 Tasks & Announcements</h3>
+                        <button onclick="openTaskModal()" class="btn-purple btn-sm" style="width:auto;padding:8px 18px;">+ New Task</button>
+                    </div>
+                    <div id="sa-tasks-container"><p style="color:#aaa;text-align:center;padding:20px;">Loading…</p></div>
+                </div>
+
+                <!-- WCR Reports -->
                 <div id="admin-sub-reports" class="admin-sub-panel hidden">
                     <div style="margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
                         <h3 style="margin:0;color:var(--primary);font-size:15px;">&#128202; 4-Week Performance (%)</h3>
-                        <button onclick="downloadMasterReport()" class="btn-success btn-sm" style="width:auto;padding:8px 18px;">&#11015; Master Excel</button>
+                        <button onclick="downloadMasterReport()" class="btn-success btn-sm" style="width:auto;padding:8px 18px;">⬇ Master Excel</button>
+                        <select onchange="downloadDeptExcel(this.value);this.value=''" class="btn-sm" style="width:auto;padding:6px 10px;font-size:12px;border:1px solid #ddd;border-radius:8px;background:white;cursor:pointer;">
+                            <option value="" disabled selected>Dept Excel</option>
+                            <option value="IGF">IGF</option><option value="IYF">IYF</option><option value="ICF_MTG">ICF_MTG</option><option value="ICF_PRJI">ICF_PRJI</option>
+                        </select>
+                        <button onclick="openTaskModal()" class="btn-purple btn-sm" style="width:auto;padding:8px 18px;">+ Task</button>
                     </div>
                     <div class="card" style="overflow-x:auto;overflow-y:auto;max-height:70vh;">
                         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
-                            <select id="reports-filter-dept" style="display:none;"></select>
-                            <select id="reports-filter-team" onchange="filterReports()" style="margin:0;width:auto;flex-shrink:0;padding:8px 10px;font-size:12px;border-radius:8px;border:1px solid #ddd;"><option value="">All Teams</option><option value="Yashoda">Yashoda</option><option value="Devaki">Devaki</option><option value="Balarama">Balarama</option><option value="Other">Other</option></select>
+                            <select id="reports-filter-dept"  onchange="updateFilterTeams('reports')" style="margin:0;width:auto;flex-shrink:0;padding:8px 10px;font-size:12px;border-radius:8px;border:1px solid #ddd;"><option value="">All Depts</option><option value="IGF">IGF</option><option value="IYF">IYF</option><option value="ICF_MTG">ICF_MTG</option><option value="ICF_PRJI">ICF_PRJI</option></select>
                             <select id="reports-filter-level" onchange="filterReports()" style="margin:0;width:auto;flex-shrink:0;padding:8px 10px;font-size:12px;border-radius:8px;border:1px solid #ddd;"><option value="">All Levels</option><option value="Level-1">Level-1</option><option value="Level-2">Level-2</option><option value="Level-3">Level-3</option><option value="Level-4">Level-4</option></select>
+                            <select id="reports-filter-team"  onchange="filterReports()" style="margin:0;width:auto;flex-shrink:0;padding:8px 10px;font-size:12px;border-radius:8px;border:1px solid #ddd;"><option value="">All Teams</option><option value="Yashoda">Yashoda</option><option value="Devaki">Devaki</option><option value="Balarama">Balarama</option><option value="Other">Other</option></select>
+                        </div>
+                        <div id="admin-perf-section" style="margin-top:16px;">
+                            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+                                <h4 style="margin:0;color:#1A3C5E;font-size:14px;">⭐ Best & Weak Performers</h4>
+                                <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                                    <select id="sa-perf-year-sel" onchange="onPerfYearChange()" style="width:auto;padding:5px 8px;font-size:11px;border-radius:6px;border:1px solid #ddd;margin:0;"></select>
+                                    <select id="sa-perf-month-sel" onchange="onPerfMonthChange()" style="width:auto;padding:5px 8px;font-size:11px;border-radius:6px;border:1px solid #ddd;margin:0;"></select>
+                                    <select id="sa-perf-week-sel" onchange="onPerfWeekChange()" style="width:auto;padding:5px 8px;font-size:11px;border-radius:6px;border:1px solid #ddd;margin:0;"></select>
+                                    <button class="chart-tab-btn active perf-tab-btn" onclick="setPerfTab('weekly',this)">Weekly</button>
+                                    <button class="chart-tab-btn perf-tab-btn" onclick="setPerfTab('monthly',this)">Monthly</button>
+                                </div>
+                            </div>
+                            <div id="admin-perf-charts"></div>
                         </div>
                         <div id="admin-comparative-reports-container"></div>
                     </div>
@@ -954,9 +1261,9 @@ function closeUserGuide() {
                             <input type="text" id="admin-search-input" placeholder="Search by name..." oninput="filterAdminUsers()" style="margin:0;flex:1;">
                         </div>
                         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
-                            <select id="admin-filter-dept" style="display:none;"></select>
+                            <select id="admin-filter-dept"  onchange="updateFilterTeams('admin')" style="margin:0;width:auto;flex-shrink:0;padding:8px 10px;font-size:12px;border-radius:8px;border:1px solid #ddd;"><option value="">All Depts</option><option value="IGF">IGF</option><option value="IYF">IYF</option><option value="ICF_MTG">ICF_MTG</option><option value="ICF_PRJI">ICF_PRJI</option></select>
                             <select id="admin-filter-level" onchange="filterAdminUsers()" style="margin:0;width:auto;flex-shrink:0;padding:8px 10px;font-size:12px;border-radius:8px;border:1px solid #ddd;"><option value="">All Levels</option><option value="Level-1">Level-1</option><option value="Level-2">Level-2</option><option value="Level-3">Level-3</option><option value="Level-4">Level-4</option></select>
-                            <select id="admin-filter-team" onchange="filterAdminUsers()" style="margin:0;width:auto;flex-shrink:0;padding:8px 10px;font-size:12px;border-radius:8px;border:1px solid #ddd;"><option value="">All Teams</option><option value="Yashoda">Yashoda</option><option value="Devaki">Devaki</option><option value="Balarama">Balarama</option><option value="Other">Other</option></select>
+                            <select id="admin-filter-team"  onchange="filterAdminUsers()" style="margin:0;width:auto;flex-shrink:0;padding:8px 10px;font-size:12px;border-radius:8px;border:1px solid #ddd;"><option value="">All Teams</option><option value="Yashoda">Yashoda</option><option value="Devaki">Devaki</option><option value="Balarama">Balarama</option><option value="Other">Other</option></select>
                         </div>
                         <div id="admin-users-list"></div>
                     </div>
@@ -966,11 +1273,38 @@ function closeUserGuide() {
                 <div id="admin-sub-inactive" class="admin-sub-panel hidden">
                     <h3 style="margin:0 0 14px;color:var(--primary);font-size:15px;">&#9888; Inactive Devotees</h3>
                     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
-                            <select id="inactive-filter-dept" style="display:none;"></select>
+                            <select id="inactive-filter-dept"  onchange="updateFilterTeams('inactive')" style="margin:0;width:auto;flex-shrink:0;padding:8px 10px;font-size:12px;border-radius:8px;border:1px solid #ddd;"><option value="">All Depts</option><option value="IGF">IGF</option><option value="IYF">IYF</option><option value="ICF_MTG">ICF_MTG</option><option value="ICF_PRJI">ICF_PRJI</option></select>
                             <select id="inactive-filter-level" onchange="filterInactiveUsers()" style="margin:0;width:auto;flex-shrink:0;padding:8px 10px;font-size:12px;border-radius:8px;border:1px solid #ddd;"><option value="">All Levels</option><option value="Level-1">Level-1</option><option value="Level-2">Level-2</option><option value="Level-3">Level-3</option><option value="Level-4">Level-4</option></select>
-                            <select id="inactive-filter-team" onchange="filterInactiveUsers()" style="margin:0;width:auto;flex-shrink:0;padding:8px 10px;font-size:12px;border-radius:8px;border:1px solid #ddd;"><option value="">All Teams</option><option value="Yashoda">Yashoda</option><option value="Devaki">Devaki</option><option value="Balarama">Balarama</option><option value="Other">Other</option></select>
+                            <select id="inactive-filter-team"  onchange="filterInactiveUsers()" style="margin:0;width:auto;flex-shrink:0;padding:8px 10px;font-size:12px;border-radius:8px;border:1px solid #ddd;"><option value="">All Teams</option><option value="Yashoda">Yashoda</option><option value="Devaki">Devaki</option><option value="Balarama">Balarama</option><option value="Other">Other</option></select>
                         </div>
                     <div id="admin-inactive-container"></div>
+                </div>
+
+                <!-- Admin Leaderboard/Rankings -->
+                <div id="admin-sub-leaderboard" class="admin-sub-panel hidden">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+                        <h3 style="margin:0;color:var(--primary);font-size:16px;">🏆 Leaderboard</h3>
+                        <button onclick="loadAdminLeaderboard(true)" class="btn-sm" style="width:auto;padding:6px 14px;background:#f0f4f8;border:1px solid #ddd;color:#1A3C5E;font-weight:600;border-radius:8px;cursor:pointer;">🔄 Refresh</button>
+                    </div>
+                    <div class="chart-tabs" id="sa-lb-mode-tabs" style="margin-bottom:12px;">
+                        <button class="chart-tab-btn" onclick="setAdminLBMode('daily',this)">Yesterday</button>
+                        <button class="chart-tab-btn active" onclick="setAdminLBMode('weekly',this)">This Week</button>
+                        <button class="chart-tab-btn" onclick="setAdminLBMode('lastweek',this)">Last Week</button>
+                    </div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
+                        <select id="sa-lb-filter-dept" onchange="updateSALBTeams();filterAdminLB()" style="margin:0;width:auto;flex-shrink:0;padding:8px 10px;font-size:12px;border-radius:8px;border:1px solid #ddd;">
+                            <option value="">All Depts</option><option value="IGF">IGF</option><option value="IYF">IYF</option><option value="ICF_MTG">ICF_MTG</option><option value="ICF_PRJI">ICF_PRJI</option>
+                        </select>
+                        <select id="sa-lb-filter-level" onchange="filterAdminLB()" style="margin:0;width:auto;flex-shrink:0;padding:8px 10px;font-size:12px;border-radius:8px;border:1px solid #ddd;">
+                            <option value="">All Levels</option><option value="Level-1">Level-1</option><option value="Level-2">Level-2</option><option value="Level-3">Level-3</option><option value="Level-4">Level-4</option>
+                        </select>
+                        <select id="sa-lb-filter-team" onchange="filterAdminLB()" style="margin:0;width:auto;flex-shrink:0;padding:8px 10px;font-size:12px;border-radius:8px;border:1px solid #ddd;">
+                            <option value="">All Teams</option>
+                        </select>
+                    </div>
+                    <div id="sa-lb-info" style="font-size:12px;color:#6b7280;margin-bottom:8px;"></div>
+                    <div id="sa-lb-podium" style="display:flex;justify-content:center;align-items:flex-start;gap:16px;margin:16px 0;min-height:160px;"></div>
+                    <div id="sa-leaderboard-container"></div>
                 </div>
 
                 <!-- Admin Management -->
@@ -993,10 +1327,18 @@ function closeUserGuide() {
         <div id="user-sidebar" class="user-sidebar">
             <div class="user-sidebar-header">
                 <button class="user-sidebar-close" onclick="closeUserSidebar()">&#10005;</button>
+                <div class="av" style="width:48px;height:48px;margin-bottom:8px;border-color:rgba(255,255,255,0.4);">
+                    <img id="sidebar-av-img" src="" alt="" style="display:none;">
+                    <span class="av-init" id="sidebar-av-init" style="color:white;font-size:20px;"></span>
+                </div>
                 <div class="user-sidebar-name" id="sidebar-user-name">—</div>
                 <div class="user-sidebar-role" id="sidebar-user-role">—</div>
             </div>
             <div class="sidebar-nav">
+                <button class="sidebar-item" onclick="closeUserSidebar(); openActivityAnalysis(currentUser.uid, userProfile.name);">
+                    <span class="sidebar-item-icon">📊</span>
+                    <span class="sidebar-item-label">Activity Analysis</span>
+                </button>
                 <button class="sidebar-item" onclick="closeUserSidebar(); openProfileEdit();">
                     <span class="sidebar-item-icon">&#9999;&#65039;</span>
                     <span class="sidebar-item-label">Edit Profile</span>
@@ -1101,15 +1443,18 @@ function closeUserGuide() {
         <div class="edit-grid">
             <div class="edit-field-group">
                 <label>Bed Time (Night)</label>
-                <input type="time" id="edit-sleep-time" oninput="updateEditPreview()">
+                <div class="time-picker-row" id="edit-sleep-time-picker"></div>
+                <input type="hidden" id="edit-sleep-time">
             </div>
             <div class="edit-field-group">
                 <label>Wake Up Time</label>
-                <input type="time" id="edit-wakeup-time" oninput="updateEditPreview()">
+                <div class="time-picker-row" id="edit-wakeup-time-picker"></div>
+                <input type="hidden" id="edit-wakeup-time">
             </div>
             <div class="edit-field-group">
                 <label>Chanting Completed By</label>
-                <input type="time" id="edit-chanting-time" oninput="updateEditPreview()">
+                <div class="time-picker-row" id="edit-chanting-time-picker"></div>
+                <input type="hidden" id="edit-chanting-time">
             </div>
             <div class="edit-field-group">
                 <label>Day Sleep (mins)</label>
@@ -1231,7 +1576,7 @@ function closeUserGuide() {
                 </table>
                 <div class="guide-info-box" style="margin-top:10px;">
                     📌 New devotees start at <b>Level-1</b> by default.<br>
-                    📌 Level is changed by Team Leader / Super Admin.
+                    📌 Level is changed by Team Leader / Dept Admin / Super Admin.
                 </div>
             </div>
             <div class="guide-section">
@@ -1739,8 +2084,8 @@ function closeUserGuide() {
                 <h3>⚙️ Roles & Permissions</h3>
                 <table class="score-table">
                     <tr><th>Role</th><th>Can Do</th></tr>
-                    <tr><td style="font-weight:700;color:#7c3aed;">Super Admin</td><td>Full access — all teams, edit sadhana, change any role/level</td></tr>
-                    <tr><td style="font-weight:700;color:#1e8449;">Team Leader</td><td>Own team — view reports and levels</td></tr>
+                    <tr><td style="font-weight:700;color:#7c3aed;">Super Admin</td><td>Full access — all depts, edit sadhana, change any role/level</td></tr>
+                    <tr><td style="font-weight:700;color:#1565C0;">Dept Admin</td><td>Own dept — change roles (teamLeader/user) and levels</td></tr>
                     <tr><td style="font-weight:700;color:#2E7D32;">Team Leader</td><td>Own team — view history, progress, change level</td></tr>
                     <tr><td style="font-weight:700;">User</td><td>Own data only — fill sadhana, view reports</td></tr>
                 </table>
@@ -1888,6 +2233,189 @@ function closeUserGuide() {
         <button onclick="closeBonusPopup()" class="btn-gray" style="margin-top:12px;">Close</button>
     </div>
 </div>
+
+<!-- ══ User Action Bottom Sheet ══ -->
+<div id="uac-overlay" class="uac-overlay hidden" onclick="closeUAC()"></div>
+<div id="uac-sheet" class="uac-sheet">
+    <div class="uac-handle"></div>
+    <div class="uac-head">
+        <div>
+            <div class="uac-hname" id="uac-name">—</div>
+            <div class="uac-hsub" id="uac-sub">—</div>
+        </div>
+        <button class="uac-x" onclick="closeUAC()">✕</button>
+    </div>
+    <div class="uac-body">
+        <button class="uac-btn" onclick="uacHistory()">
+            <div class="uac-ico" style="background:#dbeafe;">📋</div><span>View History</span>
+        </button>
+        <button class="uac-btn" onclick="uacExcel()">
+            <div class="uac-ico" style="background:#dcfce7;">📥</div><span>Download Excel</span>
+        </button>
+        <button class="uac-btn" onclick="uacProgress()">
+            <div class="uac-ico" style="background:#ede9fe;">📈</div><span>View Progress</span>
+        </button>
+        <div id="uac-activity-wrap">
+            <button class="uac-btn" onclick="uacActivity()">
+                <div class="uac-ico" style="background:#fef3c7;">📊</div><span>Activity Analysis</span>
+            </button>
+        </div>
+        <div id="uac-level-wrap" class="uac-fullwidth" style="display:none;">
+            <hr class="uac-divider">
+            <div class="uac-role-label">Change Level</div>
+            <select id="uac-level-sel" class="uac-role-sel" onchange="uacLevelChange(this)">
+                <option value="" disabled selected>Select Level…</option>
+                <option value="Level-1">Level-1</option>
+                <option value="Level-2">Level-2</option>
+                <option value="Level-3">Level-3</option>
+                <option value="Level-4">Level-4</option>
+            </select>
+        </div>
+        <div id="uac-role-wrap" class="uac-fullwidth" style="display:none;">
+            <hr class="uac-divider">
+            <div class="uac-role-label">Change Role</div>
+            <select id="uac-role-sel" class="uac-role-sel" onchange="uacRoleChange(this)">
+                <option value="" disabled selected>Select…</option>
+            </select>
+        </div>
+        <button id="uac-remove-btn" class="uac-btn danger uac-fullwidth" style="display:none;" onclick="uacRemove()">
+            <div class="uac-ico" style="background:#fee2e2;">🗑️</div><span>Remove User</span>
+        </button>
+    </div>
+</div>
+
+<!-- ══ Activity Analysis Modal ══ -->
+<div id="aa-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeActivityModal()">
+    <div class="modal-box" style="max-width:520px;padding:0;border-radius:16px;overflow:hidden;">
+        <div style="background:linear-gradient(135deg,#1A3C5E,#2563a0);padding:18px 20px 14px;display:flex;align-items:center;justify-content:space-between;">
+            <div>
+                <div style="color:white;font-size:15px;font-weight:700;">📊 Activity Analysis</div>
+                <div id="aa-user-name" style="color:#93c5fd;font-size:13px;margin-top:2px;">—</div>
+            </div>
+            <button onclick="closeActivityModal()" style="width:32px;height:32px;background:rgba(255,255,255,0.15);border:none;border-radius:50%;color:white;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;margin:0;">✕</button>
+        </div>
+        <div class="chart-tabs" style="margin:14px 20px 0;">
+            <button class="chart-tab-btn aa-tab-btn active" onclick="setAATab('current-week',this)">This Week</button>
+            <button class="chart-tab-btn aa-tab-btn"        onclick="setAATab('prev-week',this)">Last Week</button>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 20px 0;">
+            <div id="aa-period-label" style="font-size:12px;color:#6b7280;"></div>
+            <div id="aa-status" style="font-size:12px;color:#6b7280;"></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:16px;padding:16px 20px 20px;">
+            <div style="display:flex;align-items:center;gap:20px;">
+                <div class="aa-donut-wrap" id="aa-donut-wrap">
+                    <canvas id="aa-donut-canvas"></canvas>
+                </div>
+                <div style="flex:1;">
+                    <div style="font-size:13px;font-weight:700;color:#1A3C5E;margin-bottom:4px;">Weekly Score %</div>
+                    <div style="font-size:12px;color:#6b7280;line-height:1.6;">
+                        Total marks earned ÷ max possible for submitted days.
+                        <br><span style="color:#16a34a;font-weight:600;">≥70%</span> Good &nbsp;
+                        <span style="color:#d97706;font-weight:600;">50–69%</span> OK &nbsp;
+                        <span style="color:#dc2626;font-weight:600;">&lt;50%</span> Needs work
+                    </div>
+                </div>
+            </div>
+            <div>
+                <div style="font-size:13px;font-weight:700;color:#1A3C5E;margin-bottom:8px;">Activity Breakdown (total pts this week)</div>
+                <div class="aa-bar-wrap" id="aa-bar-wrap">
+                    <canvas id="aa-bar-canvas"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ══ Submit Success Overlay ══ -->
+<div id="submit-success-overlay" class="ss-overlay">
+    <div class="ss-card">
+        <div style="font-size:64px;line-height:1;margin-bottom:14px;">🙏</div>
+        <div style="font-size:52px;font-weight:800;color:#1A3C5E;line-height:1;" id="ss-score">0</div>
+        <div style="font-size:15px;color:#6b7280;margin-top:6px;margin-bottom:18px;" id="ss-max">out of 105 pts</div>
+        <div class="ss-bar-track"><div class="ss-bar" id="ss-bar"></div></div>
+        <div style="font-size:32px;font-weight:800;color:#3498db;margin:12px 0;" id="ss-pct">0%</div>
+        <div id="ss-msg" style="font-size:14px;color:#6b7280;font-style:italic;"></div>
+    </div>
+</div>
+
+<!-- ══ Reject Modal ══ -->
+<div id="reject-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeRejectModal()">
+    <div class="modal-box sm" style="padding:20px;">
+        <h3 id="reject-modal-title" style="margin:0 0 10px;font-size:16px;color:#1A3C5E;"></h3>
+        <div id="reject-modal-body" style="font-size:13px;color:#555;margin-bottom:12px;"></div>
+        <label class="form-label">Remarks (required)</label>
+        <textarea id="reject-remarks" rows="3" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:13px;resize:vertical;" placeholder="Enter reason..."></textarea>
+        <div style="display:flex;gap:8px;margin-top:14px;">
+            <button onclick="closeRejectModal()" class="btn-gray" style="flex:1;">Cancel</button>
+            <button id="reject-confirm-btn" onclick="submitRejectAction()" class="btn-danger" style="flex:1;">Confirm</button>
+        </div>
+    </div>
+</div>
+
+<!-- ══ Task Create Modal ══ -->
+<div id="task-create-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeTaskModal()">
+    <div class="modal-box sm" style="padding:20px;">
+        <h3 style="margin:0 0 14px;font-size:16px;color:#1A3C5E;">Create Task</h3>
+        <input id="task-title" placeholder="Title" style="margin-bottom:8px;">
+        <textarea id="task-body" rows="3" placeholder="Description" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:13px;resize:vertical;"></textarea>
+        <input id="task-url" placeholder="Link URL (optional)" style="margin:8px 0;">
+        <div style="margin:8px 0;">
+            <label for="task-file-input" style="cursor:pointer;background:#f1f5f9;border:1px solid #ddd;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;color:#374151;display:inline-block;">📎 Attach File</label>
+            <input type="file" id="task-file-input" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.jpg,.jpeg,.png,.gif,.zip" style="display:none;" onchange="handleTaskFileSelect(this)">
+            <span id="task-file-name" style="font-size:12px;color:#6b7280;margin-left:8px;"></span>
+        </div>
+        <select id="task-target-dept">
+            <option value="all">All Departments</option>
+            <option value="IGF">IGF</option>
+            <option value="IYF">IYF</option>
+            <option value="ICF_MTG">ICF_MTG</option>
+            <option value="ICF_PRJI">ICF_PRJI</option>
+        </select>
+        <div style="display:flex;gap:8px;margin-top:14px;">
+            <button onclick="closeTaskModal()" class="btn-gray" style="flex:1;">Cancel</button>
+            <button onclick="submitTask()" class="btn-success" style="flex:1;">Post Task</button>
+        </div>
+    </div>
+</div>
+
+<!-- ══ User Bottom Nav ══ -->
+<nav id="user-bottom-nav" class="bottom-nav">
+    <button class="bnav-item active" onclick="bnavSwitch('home',this)">
+        <span class="bnav-icon">🏠</span><span>Home</span>
+    </button>
+    <button class="bnav-item" onclick="bnavSwitch('mysadhana',this)">
+        <span class="bnav-icon">📝</span><span>Sadhana</span>
+    </button>
+    <button class="bnav-item" onclick="bnavSwitch('team',this)">
+        <span class="bnav-icon">🏆</span><span>Team</span>
+    </button>
+    <button class="bnav-item hidden" id="bnav-manage" onclick="bnavSwitch('manage',this)">
+        <span class="bnav-icon">⚙️</span><span>Manage</span>
+    </button>
+</nav>
+
+<!-- ══ Admin Bottom Nav ══ -->
+<nav id="admin-bottom-nav" class="bottom-nav">
+    <button class="bnav-item active" onclick="bnavAdminSwitch('admin-home',this)">
+        <span class="bnav-icon">🏠</span><span>Home</span>
+    </button>
+    <button class="bnav-item" onclick="bnavAdminSwitch('admin-reports',this)">
+        <span class="bnav-icon">📊</span><span>WCR</span>
+    </button>
+    <button class="bnav-item" onclick="bnavAdminSwitch('admin',this)">
+        <span class="bnav-icon">👥</span><span>Devotees</span>
+    </button>
+    <button class="bnav-item" onclick="bnavAdminSwitch('inactive',this)">
+        <span class="bnav-icon">⚠️</span><span>Inactive</span>
+    </button>
+    <button class="bnav-item" onclick="bnavAdminSwitch('admin-leaderboard',this)">
+        <span class="bnav-icon">🏆</span><span>Rankings</span>
+    </button>
+    <button class="bnav-item" onclick="bnavAdminSwitch('admin-tasks',this)">
+        <span class="bnav-icon">📋</span><span>Tasks</span>
+    </button>
+</nav>
 
 <script src="app.js"></script>
 </body>

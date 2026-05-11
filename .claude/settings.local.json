@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:github.com)",
+      "Bash(gh api:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(git clone:*)",
+      "Read(//c/Users/User/AppData/Local/Temp/narayana-ref/**)",
+      "Read(//c/Users/User/AppData/Local/Temp/**)",
+      "Bash(cp \"C:/Users/User/AppData/Local/Temp/nad2/app.js\" \"d:/riya personal/RAPP/Sadhana Tracker/Sadhana Tracker- Coordinators Position based based/Yashoda/app.js\")",
+      "Bash(cp \"C:/Users/User/AppData/Local/Temp/nad2/index.html\" \"d:/riya personal/RAPP/Sadhana Tracker/Sadhana Tracker- Coordinators Position based based/Yashoda/index.html\")",
+      "Bash(cp \"C:/Users/User/AppData/Local/Temp/nad2/signup.html\" \"d:/riya personal/RAPP/Sadhana Tracker/Sadhana Tracker- Coordinators Position based based/Yashoda/signup.html\")",
+      "Bash(cp \"C:/Users/User/AppData/Local/Temp/nad2/sw.js\" \"d:/riya personal/RAPP/Sadhana Tracker/Sadhana Tracker- Coordinators Position based based/Yashoda/sw.js\")",
+      "Bash(cp \"C:/Users/User/AppData/Local/Temp/nad2/style.css\" \"d:/riya personal/RAPP/Sadhana Tracker/Sadhana Tracker- Coordinators Position based based/Yashoda/style.css\")",
+      "Bash(python3 -)",
+      "Bash(sed -i \"s|u\\\\.role === 'superAdmin' || u\\\\.role === 'deptAdmin' || u\\\\.role === 'teamLeader' || u\\\\.role === 'admin'|u.role === 'superAdmin' || u.role === 'deptAdmin' || u.role === 'overallTeamLeader' || u.role === 'teamLeader' || u.role === 'admin'|g\" \"d:/riya personal/RAPP/Sadhana Tracker/Sadhana Tracker- Coordinators Position based based/Yashoda/app.js\")",
+      "Bash(sed -i \"s|d\\\\.role === 'superAdmin' || d\\\\.role === 'deptAdmin' || d\\\\.role === 'teamLeader' || d\\\\.role === 'admin'|d.role === 'superAdmin' || d.role === 'deptAdmin' || d.role === 'overallTeamLeader' || d.role === 'teamLeader' || d.role === 'admin'|g\" \"d:/riya personal/RAPP/Sadhana Tracker/Sadhana Tracker- Coordinators Position based based/Yashoda/app.js\")",
+      "Bash(grep -o 'class=\"[^\"]*\"' \"d:/riya personal/RAPP/Sadhana Tracker/Sadhana Tracker- Coordinators Position based based/Narayana-Ashraya-Sadhana/index.html\" | sort | uniq > /tmp/narayana_classes.txt && grep -o 'class=\"[^\"]*\"' \"d:/riya personal/RAPP/Sadhana Tracker/Sadhana Tracker- Coordinators Position based based/Yashoda/index.html\" | sort | uniq > /tmp/yashoda_classes.txt && echo \"=== In Yashoda but NOT in Narayana ===\" && comm -13 /tmp/narayana_classes.txt /tmp/yashoda_classes.txt && echo \"=== In Narayana but NOT in Yashoda ===\" && comm -23 /tmp/narayana_classes.txt /tmp/yashoda_classes.txt)",
+      "Bash(git fetch *)",
+      "Bash(git diff *)",
+      "Read(//c/Users/User/**)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\User\\AppData\\Local\\Temp\\narayana-ref",
+      "d:\\riya personal\\RAPP\\Sadhana Tracker\\Sadhana Tracker- Coordinators Position based based\\Yashoda",
+      "\\tmp"
+    ]
+  }
+}

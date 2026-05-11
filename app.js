@@ -1,12 +1,13 @@
 // ═══════════════════════════════════════════════════════════
 // 1. FIREBASE SETUP
 // ═══════════════════════════════════════════════════════════
-const firebaseConfig = {apiKey: "AIzaSyDtLp6VU9KnfYt1Agv8L5gL68ZxRzfxodg",
-  authDomain: "yashoda-sadhana-tracker.firebaseapp.com",
-  projectId: "yashoda-sadhana-tracker",
-  storageBucket: "yashoda-sadhana-tracker.firebasestorage.app",
-  messagingSenderId: "919046799313",
-  appId: "1:919046799313:web:8d68c028ff21a4dfbe6af0"
+const firebaseConfig = {
+    apiKey: "AIzaSyDtLp6VU9KnfYt1Agv8L5gL68ZxRzfxodg",
+    authDomain: "yashoda-sadhana-tracker.firebaseapp.com",
+    projectId: "yashoda-sadhana-tracker",
+    storageBucket: "yashoda-sadhana-tracker.firebasestorage.app",
+    messagingSenderId: "919046799313",
+    appId: "1:919046799313:web:8d68c028ff21a4dfbe6af0"
 };
 if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
@@ -18,16 +19,122 @@ let userProfile    = null;
 let activeListener = null;
 
 // ═══════════════════════════════════════════════════════════
-// 2. ROLE HELPERS
+// TIME PICKER HELPERS — AM/PM custom dropdowns
 // ═══════════════════════════════════════════════════════════
-const isSuperAdmin    = () => userProfile?.role === 'superAdmin';
-const isDeptAdmin     = () => false; // removed in Yashoda project
-const isTeamLeader    = () => userProfile?.role === 'teamLeader';
-const isAnyAdmin      = () => isSuperAdmin() || isTeamLeader();
 
-// Teams — same for all departments
-const TEAMS = ['Yashoda', 'Devaki', 'Balarama', 'Other'];
+// Build AM/PM time picker into a container div
+// hiddenId = id of hidden input that stores HH:MM (24hr) value
+// onChange  = optional callback after value changes
+function buildTimePicker(containerId, hiddenId, onChange) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
 
+    // Hour select (1–12)
+    const hourSel = document.createElement('select');
+    hourSel.className = 'tp-hour';
+    const hBlank = document.createElement('option');
+    hBlank.value = ''; hBlank.textContent = 'HH'; hBlank.disabled = true; hBlank.selected = true;
+    hourSel.appendChild(hBlank);
+    for (let h = 1; h <= 12; h++) {
+        const o = document.createElement('option');
+        o.value = String(h); o.textContent = String(h).padStart(2,'0');
+        hourSel.appendChild(o);
+    }
+
+    // Minute select (00, 05, 10 ... 55)
+    const minSel = document.createElement('select');
+    minSel.className = 'tp-min';
+    const mBlank = document.createElement('option');
+    mBlank.value = ''; mBlank.textContent = 'MM'; mBlank.disabled = true; mBlank.selected = true;
+    minSel.appendChild(mBlank);
+    for (let m = 0; m < 60; m += 5) {
+        const o = document.createElement('option');
+        o.value = String(m); o.textContent = String(m).padStart(2,'0');
+        minSel.appendChild(o);
+    }
+
+    // AM/PM select
+    const ampmSel = document.createElement('select');
+    ampmSel.className = 'tp-ampm';
+    ['AM','PM'].forEach(v => {
+        const o = document.createElement('option');
+        o.value = v; o.textContent = v;
+        ampmSel.appendChild(o);
+    });
+
+    // Update hidden input on any change
+    function syncHidden() {
+        const h = hourSel.value;
+        const m = minSel.value;
+        const ap = ampmSel.value;
+        if (!h || m === '') { document.getElementById(hiddenId).value = ''; if (onChange) onChange(''); return; }
+        let hr24 = parseInt(h);
+        if (ap === 'AM' && hr24 === 12) hr24 = 0;
+        if (ap === 'PM' && hr24 !== 12) hr24 += 12;
+        const val = String(hr24).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+        document.getElementById(hiddenId).value = val;
+        if (onChange) onChange(val);
+    }
+
+    hourSel.addEventListener('change', syncHidden);
+    minSel.addEventListener('change', syncHidden);
+    ampmSel.addEventListener('change', syncHidden);
+
+    container.innerHTML = '';
+    container.appendChild(hourSel);
+    container.appendChild(minSel);
+    container.appendChild(ampmSel);
+}
+
+// Set time picker value from HH:MM 24hr string
+function setTimePicker(containerId, hiddenId, val24) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const hourSel = container.querySelector('.tp-hour');
+    const minSel  = container.querySelector('.tp-min');
+    const ampmSel = container.querySelector('.tp-ampm');
+    if (!hourSel || !minSel || !ampmSel) return;
+
+    if (!val24 || val24 === 'NR' || !val24.includes(':')) {
+        hourSel.value = ''; minSel.value = ''; ampmSel.value = 'AM';
+        document.getElementById(hiddenId).value = '';
+        return;
+    }
+    const [h24str, mStr] = val24.split(':');
+    let h24 = parseInt(h24str);
+    const m  = parseInt(mStr);
+    const ap = h24 < 12 ? 'AM' : 'PM';
+    let h12 = h24 % 12; if (h12 === 0) h12 = 12;
+
+    // Find closest minute option (round to nearest 5)
+    const mRounded = Math.round(m / 5) * 5 % 60;
+
+    hourSel.value  = String(h12);
+    minSel.value   = String(mRounded);
+    ampmSel.value  = ap;
+    document.getElementById(hiddenId).value = val24;
+}
+
+// Convert HH:MM (24hr) → "H:MM AM/PM" display string
+function fmt12(t) {
+    if (!t || t === 'NR') return t || 'NR';
+    const [h24str, mStr] = t.split(':');
+    let h24 = parseInt(h24str);
+    const m  = mStr || '00';
+    const ap = h24 < 12 ? 'AM' : 'PM';
+    let h12 = h24 % 12; if (h12 === 0) h12 = 12;
+    return `${h12}:${m} ${ap}`;
+}
+
+
+// ═══════════════════════════════════════════════════════════
+const isSuperAdmin         = () => userProfile?.role === 'superAdmin';
+const isDeptAdmin          = () => userProfile?.role === 'deptAdmin';
+const isOverallTeamLeader  = () => userProfile?.role === 'overallTeamLeader';
+const isTeamLeader         = () => userProfile?.role === 'teamLeader';
+const isAnyAdmin           = () => isSuperAdmin() || isDeptAdmin() || isOverallTeamLeader() || isTeamLeader();
+
+// Teams per department
 const DEPT_TEAMS = {
     'IGF':      ['Yashoda','Devaki','Balarama','Other'],
     'IYF':      ['Yashoda','Devaki','Balarama','Other'],
@@ -40,36 +147,45 @@ window.populateDeptTeams = (selectId, dept, selected = '') => {
     const sel = document.getElementById(selectId);
     if (!sel) return;
     sel.innerHTML = '<option value="" disabled selected>Select team</option>';
-    TEAMS.forEach(t => {
-        const o = document.createElement('option');
-        o.value = t; o.textContent = t;
-        if (t === selected) o.selected = true;
-        sel.appendChild(o);
-    });
+    if (dept && DEPT_TEAMS[dept]) {
+        DEPT_TEAMS[dept].forEach(t => {
+            const o = document.createElement('option');
+            o.value = t; o.textContent = t;
+            if (t === selected) o.selected = true;
+            sel.appendChild(o);
+        });
+    }
 };
 
 // What users this admin can see
 function getAdminScope() {
-    if (isSuperAdmin()) return { type: 'all' };
-    if (isTeamLeader()) return { type: 'team', dept: userProfile.department, team: userProfile.team };
+    if (isSuperAdmin())        return { type: 'all' };
+    if (isDeptAdmin())         return { type: 'dept', dept: userProfile.department };
+    if (isOverallTeamLeader()) return { type: 'overall-team', team: userProfile.team };
+    if (isTeamLeader())        return { type: 'team', dept: userProfile.department, team: userProfile.team };
     return { type: 'self' };
 }
 
-// Filter users by scope
+// Filter users by scope (admin operations)
 function matchesScope(uData) {
     const scope = getAdminScope();
-    if (scope.type === 'all')  return true;
-    if (scope.type === 'team') return uData.team === scope.team;
+    if (scope.type === 'all')          return true;
+    if (scope.type === 'dept')         return uData.department === scope.dept;
+    if (scope.type === 'overall-team') return uData.team === scope.team;
+    if (scope.type === 'team')         return uData.team === scope.team && uData.department === scope.dept;
     return false;
 }
 
-// For backward compatibility — level categories visible
-const visibleCategories = () => {
-    if (isSuperAdmin()) return ['Level-1','Level-2','Level-3','Level-4'];
-    if (isTeamLeader()) return ['Level-1','Level-2','Level-3','Level-4'];
-    return [];
-};
+// Filter users for WCR/Leaderboard visibility
+function matchesViewScope(uData) {
+    if (isSuperAdmin())        return true;
+    if (isDeptAdmin())         return uData.department === userProfile.department;
+    if (isOverallTeamLeader()) return uData.team === userProfile.team;
+    if (isTeamLeader())        return uData.department === userProfile.department && uData.team === userProfile.team;
+    return uData.department === userProfile.department && uData.team === userProfile.team;
+}
 
+// For backward compatibility — level categories visible
 // ═══════════════════════════════════════════════════════════
 // 3. HELPERS
 // ═══════════════════════════════════════════════════════════
@@ -81,11 +197,13 @@ const t2m = (t, isSleep = false) => {
 };
 
 function getWeekInfo(dateStr) {
-    const d   = new Date(dateStr);
+    const [y,m,dd] = dateStr.split('-').map(Number);
+    const d   = new Date(y, m-1, dd);
     const sun = new Date(d); sun.setDate(d.getDate() - d.getDay());
     const sat = new Date(sun); sat.setDate(sun.getDate() + 6);
     const fmt = dt => `${String(dt.getDate()).padStart(2,'0')} ${dt.toLocaleString('en-GB',{month:'short'})}`;
-    return { sunStr: sun.toISOString().split('T')[0], label: `${fmt(sun)} to ${fmt(sat)}_${sun.getFullYear()}` };
+    const sunStr = `${sun.getFullYear()}-${String(sun.getMonth()+1).padStart(2,'0')}-${String(sun.getDate()).padStart(2,'0')}`;
+    return { sunStr, label: `${fmt(sun)} to ${fmt(sat)}_${sun.getFullYear()}` };
 }
 
 function localDateStr(offsetDays = 0) {
@@ -104,6 +222,29 @@ function getNRData(date) {
 
 function isPastDate(dateStr) {
     return dateStr < localDateStr(0);
+}
+
+// Convert a Date object to YYYY-MM-DD using local timezone (NOT UTC)
+function toLocalDS(d) {
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function getWeekDates(weekOffset) {
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    const weekStart = new Date(today);
+    weekStart.setDate(today.getDate() - dayOfWeek - (weekOffset * 7));
+    weekStart.setHours(0,0,0,0);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    if (weekOffset === 0) {
+        if (weekEnd > today) weekEnd.setTime(today.getTime());
+    }
+    const toStr = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const dates = [];
+    const cur = new Date(weekStart);
+    while (cur <= weekEnd) { dates.push(toStr(cur)); cur.setDate(cur.getDate() + 1); }
+    return { dates, weekStart, weekEnd };
 }
 
 // ─── INSTRUMENT OPTIONS per level ────────────────────────
@@ -262,8 +403,6 @@ function getDailyMax(level) {
 // ═══════════════════════════════════════════════════════════
 function xlsxSave(wb, filename) {
     try {
-        XLSX.writeFile(wb, filename);
-    } catch (e) {
         const arr  = XLSX.write(wb, { bookType:'xlsx', type:'array' });
         const blob = new Blob([arr], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
         const url  = URL.createObjectURL(blob);
@@ -271,22 +410,26 @@ function xlsxSave(wb, filename) {
         a.href = url; a.download = filename; a.style.display = 'none';
         document.body.appendChild(a); a.click();
         setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 2500);
+    } catch (e) {
+        console.error('Excel save error:', e);
+        alert('Download failed: ' + e.message);
     }
 }
 
-// Helper: set cell style (bold, fill, font color, alignment, border)
+// Helper: set cell style using xlsx-js-style (same API as xlsx@0.18 + style support)
 function styleCell(ws, cellRef, opts = {}) {
     if (!ws[cellRef]) ws[cellRef] = { v:'', t:'s' };
+    const border = {
+        top:    { style:'thin', color:{rgb:'BFBFBF'} },
+        bottom: { style:'thin', color:{rgb:'BFBFBF'} },
+        left:   { style:'thin', color:{rgb:'BFBFBF'} },
+        right:  { style:'thin', color:{rgb:'BFBFBF'} }
+    };
     ws[cellRef].s = {
-        font:      { bold: opts.bold||false, color: opts.fontColor ? {rgb: opts.fontColor} : undefined, sz: opts.sz||11 },
-        fill:      opts.fill ? { fgColor: {rgb: opts.fill}, patternType:'solid' } : undefined,
+        font:      { bold: opts.bold||false, color:{rgb: opts.fontColor||'1A252F'}, sz: opts.sz||11, name:'Calibri' },
+        fill:      { patternType:'solid', fgColor: {rgb: opts.fill||'FFFFFF'} },
         alignment: { horizontal: opts.align||'center', vertical:'center', wrapText: false },
-        border: {
-            top:    { style:'thin', color:{rgb:'CCCCCC'} },
-            bottom: { style:'thin', color:{rgb:'CCCCCC'} },
-            left:   { style:'thin', color:{rgb:'CCCCCC'} },
-            right:  { style:'thin', color:{rgb:'CCCCCC'} }
-        }
+        border
     };
 }
 
@@ -329,9 +472,11 @@ window.downloadUserExcel = async (userId, userName) => {
 
         const sortedWeeks = Object.keys(weeksData).sort((a,b) => b.localeCompare(a));
         const DAY = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-        // Columns: Date,Bed,M,Wake,M,Chant,M,Pathan(m),M,Hearing(m),M,Instrument(m),M,Seva(m),Seva Notes,DaySleep(m),M,Bonus,Total,%
-        // L4 extra: Notes(m)
-        const COLS = isL4 ? 22 : 21;
+        // Columns (0-indexed): 0=Date,1=Bed,2=M,3=Wake,4=M,5=Chant,6=M,
+        //   7=Read(m),8=M,9=Hear(m),10=M,11=Inst(m),12=M,
+        //   13=Seva(m),14=SevaText,15=DaySleep(m),16=M,17=Bonus,18=Total,19=%
+        // L4 inserts Notes(m) at index 17, shifting Bonus→18, Total→19, %→20
+        const COLS = isL4 ? 21 : 20;
 
         // ── PROFILE HEADER ────────────────────────────────
         const today = new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
@@ -372,13 +517,13 @@ window.downloadUserExcel = async (userId, userName) => {
             styleMap[chRow] = 'colHeader';
 
             let T = { sl:0,wu:0,ch:0,rd:0,hr:0,inst:0,ds:0, rdm:0,hrm:0,instm:0,svm:0,dsm:0,bonus:0,tot:0,ntm:0 };
-            const wStart = new Date(week.sunStr);
+            const [_sy,_sm,_sd] = week.sunStr.split('-').map(Number);
             const weekEntries = [];
 
             for (let i = 0; i < 7; i++) {
-                const cd  = new Date(wStart); cd.setDate(cd.getDate()+i);
-                const ds  = cd.toISOString().split('T')[0];
-                const lbl = `${DAY[i]} ${String(cd.getDate()).padStart(2,'0')}`;
+                const cd  = new Date(_sy, _sm-1, _sd+i);
+                const ds  = `${cd.getFullYear()}-${String(cd.getMonth()+1).padStart(2,'0')}-${String(cd.getDate()).padStart(2,'0')}`;
+                const lbl = `${DAY[cd.getDay()]} ${String(cd.getDate()).padStart(2,'0')}`;
                 const e   = week.days[ds] || getNRData(ds);
                 const dRow = dataArray.length;
                 const bonus= e.bonusTotal||0;
@@ -397,9 +542,9 @@ window.downloadUserExcel = async (userId, userName) => {
 
                 const row = [
                     lbl,
-                    e.sleepTime||'NR',    e.scores?.sleep??0,
-                    e.wakeupTime||'NR',   e.scores?.wakeup??0,
-                    e.chantingTime||'NR', e.scores?.chanting??0,
+                    fmt12(e.sleepTime||'NR'),    e.scores?.sleep??0,
+                    fmt12(e.wakeupTime||'NR'),   e.scores?.wakeup??0,
+                    fmt12(e.chantingTime||'NR'), e.scores?.chanting??0,
                     e.readingMinutes||0,  e.scores?.reading??0,
                     e.hearingMinutes||0,  e.scores?.hearing??0,
                     e.instrumentMinutes||0, e.scores?.instrument??0,
@@ -446,8 +591,8 @@ window.downloadUserExcel = async (userId, userName) => {
         const merges = [];
         // Profile title spans all columns
         merges.push({s:{r:0,c:0}, e:{r:0,c:COLS-1}});
-        // Profile rows: label in col 0, value merged cols 1-18
-        for (let r=2;r<=6;r++) merges.push({s:{r,c:1}, e:{r,c:COLS-1}});
+        // Profile rows: label in col 0, value merged cols 1 onward (rows 2-9)
+        for (let r=2;r<=9;r++) merges.push({s:{r,c:1}, e:{r,c:COLS-1}});
 
         // Week & summary row merges
         Object.entries(styleMap).forEach(([rStr, type]) => {
@@ -462,10 +607,15 @@ window.downloadUserExcel = async (userId, userName) => {
         // Profile title
         styleCell(ws, 'A1', { bold:true, fill:'1A3C5E', fontColor:'FFFFFF', sz:13, align:'center' });
 
-        // Profile label cells (col A, rows 3-7)
-        for (let r=2;r<=6;r++) {
-            styleCell(ws, `A${r+1}`, { bold:true, fill:'EBF3FB', align:'left' });
-            styleCell(ws, `B${r+1}`, { align:'left' });
+        // Profile label cells (col A, rows 3-10) + value cells
+        for (let r=2;r<=9;r++) {
+            styleCell(ws, `A${r+1}`, { bold:true, fill:'1A3C5E', fontColor:'FFFFFF', align:'left' });
+            for (let c=1;c<COLS;c++) styleCell(ws, `${colLetter(c)}${r+1}`, { fill:'EBF3FB', align:'left' });
+        }
+        // Blank rows (row 2 and row 11) — light fill with border
+        for (let c=0;c<COLS;c++) {
+            styleCell(ws, `${colLetter(c)}2`, { fill:'1A3C5E' });
+            styleCell(ws, `${colLetter(c)}11`, { fill:'F0F4F8' });
         }
 
         // Data rows styling
@@ -486,7 +636,17 @@ window.downloadUserExcel = async (userId, userName) => {
             } else if (type === 'total') {
                 for (let c=0;c<COLS;c++) {
                     const ref = `${colLetter(c)}${rNum}`;
-                    styleCell(ws, ref, { bold:true, fill:'D5E8F7', align:'center' });
+                    styleCell(ws, ref, { bold:true, fill:'D5E8F7', sz:11, align:'center' });
+                }
+                // Date column
+                styleCell(ws, `A${rNum}`, { bold:true, fill:'D5E8F7', align:'left', sz:12 });
+                // % column conditional
+                const totPctRef = `${colLetter(COLS-1)}${rNum}`;
+                if (ws[totPctRef]) {
+                    const pv = parseInt(String(ws[totPctRef].v))||0;
+                    const tf = pv >= 70 ? 'C6EFCE' : pv >= 50 ? 'FFEB9C' : 'FFC7CE';
+                    const tc = pv >= 70 ? '006100' : pv >= 50 ? '9C5700' : 'C0392B';
+                    styleCell(ws, totPctRef, { bold:true, fill:tf, fontColor:tc, sz:13, align:'center' });
                 }
             } else if (type === 'summary') {
                 for (let c=0;c<COLS;c++) {
@@ -497,40 +657,49 @@ window.downloadUserExcel = async (userId, userName) => {
                 // NR row — light red background
                 for (let c=0;c<COLS;c++) {
                     const ref = `${colLetter(c)}${rNum}`;
-                    styleCell(ws, ref, { fill:'FDE8E8', fontColor:'C0392B', align:'center' });
+                    styleCell(ws, ref, { fill:'FFC7CE', fontColor:'C0392B', align:'center' });
                 }
-                // Date col left aligned
-                if (ws[`A${rNum}`]) ws[`A${rNum}`].s.alignment.horizontal = 'left';
+                // Date col left aligned + bold
+                styleCell(ws, `A${rNum}`, { bold:true, fill:'FFC7CE', fontColor:'C0392B', align:'left' });
             } else if (type === 'data') {
-                // Date col
-                styleCell(ws, `A${rNum}`, { align:'left' });
-                // Score columns (M cols): C,E,G,I,K,M,O,Q = col indices 2,4,6,8,10,12,14,16
-                const scoreCols = [2,4,6,8,10,12,14,16];
-                for (let c=0;c<COLS;c++) {
+                // Date col — bold, left aligned
+                styleCell(ws, `A${rNum}`, { bold:true, align:'left' });
+                // Score columns (M cols): C,E,G,I,K,M,Q = col indices 2,4,6,8,10,12,16
+                // Also index 14 if L4 (notes marks)
+                const scoreCols = [2,4,6,8,10,12,16];
+                if (isL4) scoreCols.push(17);
+                for (let c=1;c<COLS;c++) {
                     const ref  = `${colLetter(c)}${rNum}`;
                     const cell = ws[ref];
-                    if (!cell) continue;
-                    if (scoreCols.includes(c) || c===17) {
-                        // Score cell — conditional color
+                    if (!cell) { styleCell(ws, ref, { align:'center' }); continue; }
+                    if (scoreCols.includes(c)) {
+                        // Score cell — conditional color like the app
                         const val = typeof cell.v === 'number' ? cell.v : parseFloat(cell.v)||0;
-                        const fill  = val >= 20 ? 'D5F5E3'   // green
-                                    : val >= 10 ? 'FEF9E7'   // yellow
+                        const fill  = val >= 20 ? 'C6EFCE'   // green (like app high-score)
+                                    : val >= 10 ? 'FFEB9C'   // yellow
                                     : val >=  0 ? 'FAD7A0'   // orange
-                                    :             'FADBD8';   // red
-                        const fColor = val < 0 ? 'C0392B' : '1A252F';
-                        styleCell(ws, ref, { fill, fontColor:fColor, align:'center' });
+                                    :             'FFC7CE';   // red (like app low-score)
+                        const fColor = val < 0 ? 'C0392B' : val >= 20 ? '006100' : val >= 10 ? '9C5700' : '1A252F';
+                        styleCell(ws, ref, { fill, fontColor:fColor, bold: val >= 20 || val < 0, align:'center' });
                     } else {
                         styleCell(ws, ref, { align:'center' });
                     }
                 }
-                // Total col (R=index 17) — bold
-                const totRef = `R${rNum}`;
-                if (ws[totRef]) ws[totRef].s.font.bold = true;
+                // Total col (COLS-2) — re-apply with bold + larger font
+                styleCell(ws, `${colLetter(COLS-2)}${rNum}`, { bold:true, sz:12, align:'center' });
+                // % col — bold with conditional color
+                const pctRef = `${colLetter(COLS-1)}${rNum}`;
+                if (ws[pctRef]) {
+                    const pctVal = parseInt(String(ws[pctRef].v))||0;
+                    const pctFill = pctVal >= 70 ? 'C6EFCE' : pctVal >= 50 ? 'FFEB9C' : 'FFC7CE';
+                    const pctFC = pctVal >= 70 ? '006100' : pctVal >= 50 ? '9C5700' : 'C0392B';
+                    styleCell(ws, pctRef, { bold:true, fill:pctFill, fontColor:pctFC, align:'center' });
+                }
             }
         });
 
-        // Freeze top 8 rows (profile) + column A
-        ws['!freeze'] = { xSplit:1, ySplit:PROFILE_ROWS, topLeftCell:'B9' };
+        // Freeze profile block + column A
+        ws['!freeze'] = { xSplit:1, ySplit:PROFILE_ROWS, topLeftCell:`B${PROFILE_ROWS+1}` };
 
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Sadhana_Weekly');
@@ -546,17 +715,21 @@ window.downloadMasterReport = async () => {
         const userData = [];
         const weekMap = new Map();
 
-        for (const uDoc of usersSnap.docs) {
+        const filteredDocs = usersSnap.docs.filter(uDoc => {
             const u = uDoc.data();
-            if (!matchesScope(u)) continue;
-            const sSnap = await uDoc.ref.collection('sadhana').get();
-            const entries = sSnap.docs.map(d=>({date:d.id, score:d.data().totalScore||0}));
+            if (u.role === 'superAdmin' || u.role === 'deptAdmin' || u.role === 'overallTeamLeader' || u.role === 'teamLeader' || u.role === 'admin') return false;
+            return matchesScope(u);
+        });
+        const allSnaps = await Promise.all(filteredDocs.map(uDoc => uDoc.ref.collection('sadhana').get()));
+        filteredDocs.forEach((uDoc, i) => {
+            const u = uDoc.data();
+            const entries = allSnaps[i].docs.map(d=>({date:d.id, score:d.data().totalScore||0, bonus:d.data().bonusTotal||0, svcMins:d.data().serviceMinutes||0, sleepTime:d.data().sleepTime||''}));
             entries.forEach(en => {
                 const wi = getWeekInfo(en.date);
                 weekMap.set(wi.sunStr, wi.label);
             });
             userData.push({ user:u, entries });
-        }
+        });
         userData.sort((a,b)=>(a.user.name||'').localeCompare(b.user.name||''));
 
         // Sort weeks by sunStr descending (newest first) — YYYY-MM-DD sorts perfectly
@@ -569,15 +742,16 @@ window.downloadMasterReport = async () => {
         userData.forEach(({user,entries}) => {
             const row = [user.name, user.level||'Level-1', user.department||'-', user.team||'-', user.chantingCategory||'N/A'];
             allWeeks.forEach(({ sunStr }) => {
-                let tot = 0; const masterWeekEnts = [];
+                let tot = 0, svcMinsWeek = 0; const masterWeekEnts = [];
                 const wSun = new Date(sunStr);
                 for (let i=0;i<7;i++) {
                     const c  = new Date(wSun); c.setDate(c.getDate()+i);
-                    const ds = c.toISOString().split('T')[0];
+                    const ds = toLocalDS(c);
                     const en = entries.find(e=>e.date===ds);
-                    tot += en ? en.score : -30;
-                    if(en) masterWeekEnts.push({id:ds,sleepTime:en.sleepTime||''});
+                    if (en) { tot += en.score + (en.bonus||0); svcMinsWeek += en.svcMins||0; masterWeekEnts.push({id:ds,sleepTime:en.sleepTime||''}); }
+                    else { tot += -30; }
                 }
+                tot += calcServiceWeekly(svcMinsWeek, user.level||'Level-1');
                 const mfd = fairDenominator(wSun, masterWeekEnts);
                 const pct = Math.round((tot/mfd)*100);
                 row.push(pct < 0 ? `(${Math.abs(pct)}%)` : `${pct}%`);
@@ -591,34 +765,39 @@ window.downloadMasterReport = async () => {
         const hCols = rows[0].length;
         for (let c = 0; c < hCols; c++) {
             const ref = `${colLetter(c)}1`;
-            styleCell(ws, ref, { bold:true, fill:'1A3C5E', fontColor:'FFFFFF', sz:11, align: c===0 ? 'left' : 'center' });
+            styleCell(ws, ref, { bold:true, fill:'1A3C5E', fontColor:'FFFFFF', sz:11, align: c < 5 ? 'left' : 'center' });
         }
 
-        // Style data rows with matching colors
+        // TEXT_COLS: Name(0), Level(1), Department(2), Team(3), Chanting(4) — 5 info cols before week data
+        const TEXT_COLS = 5;
+        // Style data rows
         for (let r = 1; r < rows.length; r++) {
             const stripeBg = r % 2 === 0 ? 'F8FAFC' : 'FFFFFF';
-            // Name, level, chanting cols
-            for (let c = 0; c < 3; c++) {
+            // Info columns (text)
+            for (let c = 0; c < TEXT_COLS; c++) {
                 const ref = `${colLetter(c)}${r+1}`;
                 styleCell(ws, ref, { fill: stripeBg, align:'left', bold: c===0 });
             }
-            // Week pct cols
-            for (let c = 3; c < rows[r].length; c++) {
+            // Week % columns
+            for (let c = TEXT_COLS; c < rows[r].length; c++) {
                 const ref  = `${colLetter(c)}${r+1}`;
                 const cell = ws[ref];
-                if (!cell) continue;
-                const raw  = parseInt(String(cell.v).replace('%','').replace('(','').replace(')','')) || 0;
+                if (!cell) { styleCell(ws, ref, { fill: stripeBg, align:'center' }); continue; }
+                const raw   = parseInt(String(cell.v).replace('%','').replace('(','').replace(')','')) || 0;
                 const isNeg = String(cell.v).includes('(');
-                const pct  = isNeg ? -Math.abs(raw) : raw;
-                let fill = stripeBg, fontColor = '1A252F'; let bold = false;
-                if (pct < 0)   { fill = 'FFFDE7'; fontColor = 'B91C1C'; bold = true; }
-                else if (pct < 20) { fill = 'FFFDE7'; fontColor = 'B91C1C'; bold = true; }
-                else if (pct >= 70){ fontColor = '15803D'; bold = true; }
+                const pct   = isNeg ? -Math.abs(raw) : raw;
+                let fill = stripeBg, fontColor = '1A252F', bold = false;
+                if (pct < 0)        { fill = 'FFC7CE'; fontColor = 'C0392B'; bold = true; }
+                else if (pct < 20)  { fill = 'FFC7CE'; fontColor = 'C0392B'; bold = true; }
+                else if (pct < 50)  { fill = 'FFEB9C'; fontColor = '9C5700'; bold = false; }
+                else if (pct < 70)  { fill = 'FFEB9C'; fontColor = '9C5700'; bold = true; }
+                else                { fill = 'C6EFCE'; fontColor = '006100'; bold = true; }
                 styleCell(ws, ref, { fill, fontColor, bold, align:'center' });
             }
         }
 
-        ws['!cols'] = [{ wch:22 }, { wch:16 }, { wch:12 }, ...Array(allWeeks.length).fill({ wch:18 })];
+        ws['!cols'] = [{ wch:24 }, { wch:12 }, { wch:14 }, { wch:14 }, { wch:16 }, ...Array(allWeeks.length).fill({ wch:16 })];
+        ws['!freeze'] = { xSplit: TEXT_COLS, ySplit: 1, topLeftCell: `${colLetter(TEXT_COLS)}2` };
 
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Master_Report');
@@ -630,11 +809,38 @@ window.downloadMasterReport = async () => {
 // ═══════════════════════════════════════════════════════════
 // 5. AUTH
 // ═══════════════════════════════════════════════════════════
+function resetAppState() {
+    try {
+        _userWCRLoaded = false;
+        adminPanelLoaded = false;
+        window._wcrUserList = [];
+        window._adminCmpUserList = [];
+        window._profilePicDataUrl = null;
+        if (typeof myChartInstance !== 'undefined' && myChartInstance) { try { myChartInstance.destroy(); } catch(e){} myChartInstance = null; }
+        if (typeof modalChartInstance !== 'undefined' && modalChartInstance) { try { modalChartInstance.destroy(); } catch(e){} modalChartInstance = null; }
+        if (typeof _aaChartDonut !== 'undefined' && _aaChartDonut) { try { _aaChartDonut.destroy(); } catch(e){} _aaChartDonut = null; }
+        if (typeof _aaChartBar !== 'undefined' && _aaChartBar) { try { _aaChartBar.destroy(); } catch(e){} _aaChartBar = null; }
+        const ubn = document.getElementById('user-bottom-nav');
+        const abn = document.getElementById('admin-bottom-nav');
+        if (ubn) ubn.classList.remove('visible');
+        if (abn) abn.classList.remove('visible');
+        document.body.classList.remove('has-bottom-nav');
+        if (activeListener) { activeListener(); activeListener = null; }
+        if (typeof editModalUserId !== 'undefined') { editModalUserId = null; editModalDate = null; editModalOriginal = null; }
+        if (typeof _uacUID !== 'undefined') { _uacUID = null; _uacName = null; }
+        if (typeof _homeWeekOffset !== 'undefined') _homeWeekOffset = 0;
+        if (typeof _lbMode !== 'undefined') { _lbMode = 'weekly'; _lbLoading = false; }
+        if (typeof _perfAllData !== 'undefined') { _perfAllData = []; _perfTab = 'weekly'; }
+        if (typeof _saHomeLoaded !== 'undefined') _saHomeLoaded = false;
+    } catch(e) { console.warn('resetAppState:', e); }
+}
+
 let _profileUnsub = null;
 auth.onAuthStateChanged((user) => {
     // Unsubscribe previous profile listener
     if (_profileUnsub) { _profileUnsub(); _profileUnsub = null; }
 
+    resetAppState();
     if (user) {
         currentUser = user;
         let _dashboardInited = false;
@@ -646,12 +852,8 @@ auth.onAuthStateChanged((user) => {
             const prevLevel = userProfile ? userProfile.level : null;
             userProfile = docSnap.data();
 
-            // Admins skip profile form — go straight to dashboard
-            const role = userProfile.role || 'user';
-            const isAdmin = role === 'superAdmin' || role === 'teamLeader';
-
             // Sirf name, department, team zaroori hain — level default Level-1 hoga
-            if (!isAdmin && (!userProfile.name || !userProfile.department || !userProfile.team)) {
+            if (!userProfile.name || !userProfile.department || !userProfile.team) {
                 document.getElementById('profile-title').textContent    = 'Complete Your Profile';
                 document.getElementById('profile-subtitle').textContent = 'Please fill in your details to continue';
                 document.getElementById('profile-name').value           = userProfile.name || '';
@@ -676,12 +878,14 @@ auth.onAuthStateChanged((user) => {
 });
 
 function initDashboard() {
-    const roleLabel = isSuperAdmin()  ? '👑 Super Admin'
-                    : isTeamLeader()  ? `👥 Team Leader — ${userProfile.team||''}`
+    const roleLabel = isSuperAdmin()        ? '👑 Super Admin'
+                    : isDeptAdmin()         ? `🛡️ Dept Admin — ${userProfile.department||''}`
+                    : isOverallTeamLeader() ? `🌐 Overall TL — ${userProfile.team||''}`
+                    : isTeamLeader()        ? `👥 Team Leader — ${userProfile.team||''} (${userProfile.department||''})`
                     : `${userProfile.level||'Level-1'} | ${userProfile.department||''} | ${userProfile.team||''}`;
     document.getElementById('user-display-name').textContent = userProfile.name;
     document.getElementById('user-role-display').textContent = roleLabel;
-
+    updateAvatarDisplay(userProfile.photoURL || null, userProfile.name || '');
 
     // Role-based tab visibility
     const userTabs  = document.querySelectorAll('.user-tab');
@@ -697,18 +901,34 @@ function initDashboard() {
     }
 
     showSection('dashboard');
+    // Init bottom nav FIRST so it's visible before any tab switch
+    initBottomNav();
+
     // Default tab based on role
     if (isAnyAdmin()) {
-        switchTab('admin-reports');
-        // Hide notification bell for admins — they don't need sadhana reminders
+        // All admins start at Home — scope handles what they see
+        switchTab('admin-home');
+        // Hide notification bell for admins
         const nb = document.getElementById('sidebar-notif-btn');
         if (nb) nb.style.display = 'none';
         const sd = nb && nb.previousElementSibling;
         if (sd && sd.classList.contains('sidebar-divider')) sd.style.display = 'none';
+        // Hide Admin Mgmt button for non-SA (only SA can manage roles)
+        if (!isSuperAdmin()) {
+            const adminMgmtEl = document.getElementById('admin-sub-adminmgmt');
+            if (adminMgmtEl) adminMgmtEl.style.display = 'none';
+        }
     } else {
-        switchTab('sadhana');
+        // Setup form for users
         setupDateSelect();
+        buildTimePicker('sleep-time-picker',    'sleep-time',    null);
+        buildTimePicker('wakeup-time-picker',   'wakeup-time',   null);
+        buildTimePicker('chanting-time-picker', 'chanting-time', null);
         refreshFormFields();
+        // Show Manage bnav for deptAdmin/teamLeader
+        const bnavManage = document.getElementById('bnav-manage');
+        if (bnavManage) bnavManage.classList.toggle('hidden', !isAnyAdmin());
+        switchTab('home');
     }
     if (window._initNotifications && !isAnyAdmin()) window._initNotifications();
 }
@@ -717,21 +937,32 @@ function initDashboard() {
 // 6. NAVIGATION
 // ═══════════════════════════════════════════════════════════
 window.switchTab = (t) => {
+    // Map manage to admin for non-SA admins
+    if (t === 'manage') t = 'admin-reports';
+
     // Hide ALL panels
-    ['sadhana-panel','reports-panel','progress-panel','admin-panel'].forEach(id => {
+    ['home-panel','mysadhana-panel','team-panel','admin-panel'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.remove('active');
     });
+    // Reset mysadhana sub-tabs so progress chart doesn't leak when returning
+    document.querySelectorAll('#mysadhana-panel .subtab-panel').forEach(p => p.classList.remove('active'));
+    const defaultSadhanaTab = document.getElementById('sadhana-entry-sub');
+    if (defaultSadhanaTab) defaultSadhanaTab.classList.add('active');
+    document.querySelectorAll('#mysadhana-panel .subtab-btn').forEach((b,i) => b.classList.toggle('active', i===0));
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
 
-    // admin-reports, admin, inactive all use admin-panel with sub-sections
-    if (t === 'admin-reports' || t === 'admin' || t === 'inactive' || t === 'adminmgmt') {
+    // admin tabs all use admin-panel with sub-sections
+    if (t === 'admin-home' || t === 'admin-reports' || t === 'admin' || t === 'inactive' || t === 'adminmgmt' || t === 'admin-tasks' || t === 'admin-leaderboard') {
         const el = document.getElementById('admin-panel');
         if (el) el.classList.add('active');
-        if (t !== 'adminmgmt' && !adminPanelLoaded) { adminPanelLoaded = true; loadAdminPanel(); }
-        const sectionMap = { 'admin-reports': 'reports', 'admin': 'usermgmt', 'inactive': 'inactive', 'adminmgmt': 'adminmgmt' };
+        if (t !== 'adminmgmt' && t !== 'admin-home' && t !== 'admin-tasks' && t !== 'admin-leaderboard' && !adminPanelLoaded) { adminPanelLoaded = true; loadAdminPanel(); }
+        const sectionMap = { 'admin-home': 'home', 'admin-reports': 'reports', 'admin': 'usermgmt', 'inactive': 'inactive', 'adminmgmt': 'adminmgmt', 'admin-tasks': 'tasks', 'admin-leaderboard': 'leaderboard' };
         selectAdminSection(sectionMap[t], null);
         if (t === 'adminmgmt') loadAdminMgmt();
+        if (t === 'admin-home') loadSAHome();
+        if (t === 'admin-tasks') loadSATasks();
+        if (t === 'admin-leaderboard') loadAdminLeaderboard(true);
     } else {
         const panel = document.getElementById(t + '-panel');
         if (panel) panel.classList.add('active');
@@ -740,8 +971,49 @@ window.switchTab = (t) => {
     const btn = document.querySelector(`.tab-btn[onclick*="'${t}'"]`);
     if (btn) btn.classList.add('active');
 
-    if (t === 'reports')  loadReports(currentUser.uid, 'weekly-reports-container');
-    if (t === 'progress') loadMyProgressChart('daily');
+    // Lazy-load data
+    if (t === 'home')       { loadHomePanel(_homeWeekOffset); loadTasks(); }
+    if (t === 'team')       loadLeaderboard(false);
+
+    // Sync bottom nav active state
+    const bnavMap = { home:0, mysadhana:1, team:2, manage:3 };
+    const aBnavMap = { 'admin-home':0, 'admin-reports':1, admin:2, inactive:3, 'admin-leaderboard':4, 'admin-tasks':5 };
+    const userBnav  = document.getElementById('user-bottom-nav');
+    const adminBnav = document.getElementById('admin-bottom-nav');
+    if (userBnav && bnavMap[t] !== undefined) {
+        userBnav.querySelectorAll('.bnav-item').forEach((b,i) => b.classList.toggle('active', i === bnavMap[t]));
+    }
+    if (adminBnav && aBnavMap[t] !== undefined) {
+        adminBnav.querySelectorAll('.bnav-item').forEach((b,i) => b.classList.toggle('active', i === aBnavMap[t]));
+    }
+};
+
+// Sub-tab switchers
+window.switchSadhanaTab = (sub, btn) => {
+    document.querySelectorAll('#mysadhana-panel .subtab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('#mysadhana-panel .subtab-panel').forEach(p => p.classList.remove('active'));
+    const panel = document.getElementById('sadhana-' + sub + '-sub');
+    if (panel) panel.classList.add('active');
+    if (btn) btn.classList.add('active');
+    if (sub === 'reports') loadReports(currentUser.uid, 'weekly-reports-container');
+    if (sub === 'progress') loadMyProgressChart('daily');
+};
+
+window.switchTeamTab = (sub, btn) => {
+    document.querySelectorAll('#team-panel .subtab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('#team-panel .subtab-panel').forEach(p => p.classList.remove('active'));
+    const panel = document.getElementById('team-' + sub + '-sub');
+    if (panel) panel.classList.add('active');
+    if (btn) btn.classList.add('active');
+    if (sub === 'wcr') loadUserWCR();
+    if (sub === 'rankings') loadLeaderboard(true);
+};
+
+let _homeWeekOffset = 0;
+window.switchHomeWeek = (offset, btn) => {
+    _homeWeekOffset = offset;
+    document.querySelectorAll('#home-week-tabs .chart-tab-btn').forEach((b,i) => b.classList.toggle('active', i === offset));
+    loadHomePanel(offset);
 };
 
 function showSection(sec) {
@@ -751,27 +1023,145 @@ function showSection(sec) {
 }
 
 // ═══════════════════════════════════════════════════════════
+// USER WCR (Team/Dept comparative report for regular users)
+// ═══════════════════════════════════════════════════════════
+let _userWCRLoaded = false;
+async function loadUserWCR() {
+    const container = document.getElementById('user-wcr-container');
+    if (!container) return;
+    if (_userWCRLoaded) return;
+    _userWCRLoaded = true;
+    container.innerHTML = '<p style="color:#aaa;text-align:center;padding:20px;">Loading…</p>';
+
+    try {
+        const usersSnap = await db.collection('users').get();
+        const filtered = usersSnap.docs
+            .filter(doc => {
+                const d = doc.data();
+                // Exclude all admins — only regular users in WCR
+                if (d.role === 'superAdmin' || d.role === 'deptAdmin' || d.role === 'overallTeamLeader' || d.role === 'teamLeader' || d.role === 'admin') return false;
+                return matchesViewScope(d) && d.name;
+            })
+            .sort((a,b) => (a.data().name||'').localeCompare(b.data().name||''));
+
+        const weeks = [];
+        for (let i=0;i<4;i++) {
+            weeks.push(getWeekInfo(localDateStr(i*7)));
+        }
+        weeks.reverse();
+
+        const pctStyle = (pct) => {
+            if (pct < 0)   return { bg:'#FFFDE7', color:'#b91c1c', bold:true, text:`(${pct}%)` };
+            if (pct < 20)  return { bg:'#FFFDE7', color:'#b91c1c', bold:true, text:`${pct}%` };
+            if (pct >= 70) return { bg:'', color:'#15803d', bold:true, text:`${pct}%` };
+            return { bg:'', color:'#1a252f', bold:false, text:`${pct}%` };
+        };
+
+        window._wcrUserList = [];
+
+        let tHtml = `<div style="overflow-x:auto;"><table class="comp-table" style="min-width:500px;">
+            <thead><tr>
+                <th class="comp-th comp-th-name">Name</th>
+                <th class="comp-th">Level</th>
+                <th class="comp-th">Team</th>
+                ${weeks.map(w=>`<th class="comp-th">${w.label.split('_')[0]}</th>`).join('')}
+            </tr></thead><tbody>`;
+
+        // Only fetch last 4 weeks of sadhana data for performance
+        const wcrFourWeeksAgo = localDateStr(28);
+        const allSnaps = await Promise.all(filtered.map(uDoc =>
+            uDoc.ref.collection('sadhana')
+                .where(firebase.firestore.FieldPath.documentId(), '>=', wcrFourWeeksAgo)
+                .get()
+        ));
+
+        filtered.forEach((uDoc, rowIdx) => {
+            const u = uDoc.data();
+            const sSnap = allSnaps[rowIdx];
+            // Use Map for O(1) date lookups instead of array.find()
+            const entsMap = new Map();
+            sSnap.docs.forEach(d => entsMap.set(d.id, { score: d.data().totalScore||0, bonus: d.data().bonusTotal||0, svcMins: d.data().serviceMinutes||0, sleepTime: d.data().sleepTime||'' }));
+            const stripeBg = rowIdx % 2 === 0 ? '#ffffff' : '#f8fafc';
+
+            const wcrIdx = window._wcrUserList.length;
+            window._wcrUserList.push({
+                uid: uDoc.id, name: u.name||'', level: u.level||'Level-1',
+                chanting: u.chantingCategory||'', rounds: u.exactRounds||'0',
+                role: u.role||'user', dept: u.department||'', team: u.team||''
+            });
+
+            const isSelf = uDoc.id === currentUser.uid;
+            const nameClick = ` onclick="openWCRUser(${wcrIdx})" style="cursor:pointer;${isSelf?'font-weight:800;color:#1A3C5E;':''}" title="View ${u.name||'user'}"`;
+            tHtml += `<tr style="background:${isSelf?'#eff6ff':stripeBg}">
+                <td class="comp-td comp-name"${nameClick}>${u.name}${isSelf?' ★':''}</td>
+                <td class="comp-td comp-meta">${u.level||'L1'}</td>
+                <td class="comp-td comp-meta">${u.team||'-'}</td>`;
+
+            weeks.forEach(w => {
+                let tot=0, svcMinsWeek=0; const weekEnts=[]; const todayC = localDateStr(0);
+                let curr=new Date(w.sunStr);
+                for (let i=0;i<7;i++) {
+                    const ds=toLocalDS(curr);
+                    if (ds < APP_START || ds > todayC) { curr.setDate(curr.getDate()+1); continue; }
+                    const en = entsMap.get(ds);
+                    if (en) {
+                        tot += en.score + (en.bonus||0);
+                        svcMinsWeek += en.svcMins||0;
+                        weekEnts.push({id:ds,sleepTime:en.sleepTime||''});
+                    } else if (ds < todayC) { tot += -30; }
+                    curr.setDate(curr.getDate()+1);
+                }
+                tot += calcServiceWeekly(svcMinsWeek, u.level||'Level-1');
+                const fd = fairDenominator(w.sunStr, weekEnts, u.level||'Level-1');
+                const pct = fd > 0 ? Math.round((tot/fd)*100) : 0;
+                const ps = pctStyle(pct);
+                const pf = `<span style="display:inline-block;padding:1px 5px;border-radius:4px;font-size:9px;font-weight:700;margin-left:4px;background:${pct>=50?'#dcfce7':'#fee2e2'};color:${pct>=50?'#15803d':'#dc2626'};">${pct>=50?'P':'F'}</span>`;
+                tHtml += `<td class="comp-td comp-pct" style="background:${ps.bg||stripeBg};color:${ps.color};font-weight:${ps.bold?'700':'400'};" title="${tot}/${fd}">${ps.text}${pf}</td>`;
+            });
+            tHtml += '</tr>';
+        });
+        tHtml += '</tbody></table></div>';
+        container.innerHTML = tHtml;
+
+        // Build cache for performers
+        const perfCache = new Map();
+        filtered.forEach((uDoc, i) => {
+            const sSnap = allSnaps[i];
+            perfCache.set(uDoc.id, sSnap.docs.map(d => ({ date: d.id, score: d.data().totalScore||0, bonus: d.data().bonusTotal||0, svcMins: d.data().serviceMinutes||0 })));
+        });
+        computePerformers(filtered, perfCache);
+    } catch(err) {
+        console.error('User WCR error:', err);
+        container.innerHTML = '<p style="color:#dc2626;text-align:center;padding:20px;">Error loading data.</p>';
+        _userWCRLoaded = false;
+    }
+}
+
+// ═══════════════════════════════════════════════════════════
 // 7. REPORTS TABLE
 // ═══════════════════════════════════════════════════════════
 const APP_START = '2026-02-12';
 
-// Fair denominator: dailyMax × submitted/NR days in week (no future days)
-function fairDenominator(sunStr, weekData, level) {
+// Fair denominator: dailyMax × eligible days in week (no future days, no unsubmitted today)
+// NR days (explicit or missing past days) count in denominator — they penalize via lower score
+function fairDenominator(sunStr, weekData, level, joinedDate) {
     const dailyMax = getDailyMax(level || 'Level-1');
     const today = localDateStr(0);
     let days = 0;
     for (let i = 0; i < 7; i++) {
         const d = new Date(sunStr); d.setDate(d.getDate() + i);
-        const ds = d.toISOString().split('T')[0];
+        const ds = toLocalDS(d);
         if (ds < APP_START) continue;
+        if (joinedDate && ds < joinedDate) continue;
         if (ds > today) break;
         if (ds === today) {
-            const submitted = weekData && weekData.find(e => e.id === ds && e.sleepTime !== 'NR');
-            if (!submitted) break;
+            // Count today only if ANY entry was submitted (including NR — they chose to mark it)
+            const hasEntry = weekData && weekData.find(e => e.id === ds);
+            if (!hasEntry) break;
         }
         days++;
     }
-    return Math.max(days, 1) * dailyMax;
+    return Math.max(days, 1) * dailyMax + 25;
 }
 
 // ─── Bonus popup ──────────────────────────────────────────
@@ -862,7 +1252,7 @@ function loadReports(userId, containerId) {
                 const weeksList = [];
                 for (let i=0;i<4;i++) {
                     const d = new Date(); d.setDate(d.getDate()-i*7);
-                    weeksList.push(getWeekInfo(d.toISOString().split('T')[0]));
+                    weeksList.push(getWeekInfo(toLocalDS(d)));
                 }
                 const weeks = {};
                 weeksList.forEach(w => { weeks[w.label] = {range:w.label, sunStr:w.sunStr, data:[], total:0}; });
@@ -877,7 +1267,7 @@ function loadReports(userId, containerId) {
                     const wk = weeks[wi.label];
                     let curr = new Date(wi.sunStr);
                     for (let i=0;i<7;i++) {
-                        const ds = curr.toISOString().split('T')[0];
+                        const ds = toLocalDS(curr);
                         if (ds>=APP_START && isPastDate(ds) && !wk.data.find(e=>e.id===ds)) {
                             const nr=getNRData(ds); wk.data.push(nr); wk.total+=nr.totalScore;
                         }
@@ -893,15 +1283,11 @@ function loadReports(userId, containerId) {
                     const svcScore   = calcServiceWeekly(svcTotal, level);
                     const weekBonus  = wk.data.reduce((s,e)=>s+(e.bonusTotal||0),0);
 
-                    const wkFD    = fairDenominator(wi.sunStr, wk.data, level);
-                    const wkTotal = wk.total + svcScore + weekBonus;
-                    const wkPct   = Math.round((wkTotal / wkFD) * 100);
-                    const wkColor = wkTotal < 0 ? '#dc2626' : wkPct < 30 ? '#d97706' : '#16a34a';
-                    // Weekly pass/fail badge — 40% criteria
-                    const wkPass      = wkPct >= 40;
-                    const wkPfBadge   = wkPass
-                        ? `<span style="display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;background:#dcfce7;color:#15803d;white-space:nowrap;">✓ Pass</span>`
-                        : `<span style="display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;background:#fee2e2;color:#dc2626;white-space:nowrap;">✗ Fail</span>`;
+                    const wkFD       = fairDenominator(wi.sunStr, wk.data, level);
+                    const daySubtotal = wk.total + weekBonus; // sum of daily totals (incl bonus)
+                    const wkTotal    = daySubtotal + svcScore;
+                    const wkPct      = Math.round((wkTotal / wkFD) * 100);
+                    const wkColor    = wkTotal < 0 ? '#dc2626' : wkPct < 30 ? '#d97706' : '#16a34a';
                     const div     = document.createElement('div'); div.className='week-card';
                     const bodyId  = containerId.replace(/[^a-zA-Z0-9]/g,'') + '-wb-' + wi.sunStr;
 
@@ -935,8 +1321,8 @@ function loadReports(userId, containerId) {
                         const editedBadge = e.editedAt
                             ? `<span class="edited-badge" onclick="showEditHistory(event,'${e.id}','${userId}')" title="View edit history">✏️</span>` : '';
                         const editBtn = isSuperAdmin()
-                            ? `<button onclick="openEditModal('${userId}','${e.id}')" class="btn-edit-cell">Edit</button>
-                               <button onclick="toggleRejectEntry('${userId}','${e.id}',${isRejected})" class="btn-edit-cell" style="background:${isRejected?'#16a34a':'#dc2626'} !important;">${isRejected?'✅ Restore':'🚫 Reject'}</button>` : '';
+                            ? `<button onclick="openEditModal('${userId}','${e.id}')" class="btn-edit-cell">${isNR ? '📝 Fill' : 'Edit'}</button>
+                               ${!isNR ? `<button onclick="openRejectModal('${userId}','${e.id}',${isRejected})" class="btn-edit-cell" style="background:${isRejected?'#16a34a':'#dc2626'} !important;">${isRejected?'✅ Restore':'🚫 Reject'}</button>` : ''}` : '';
 
                         // Best of pathan/hearing
                         const patS  = sc.reading??0;
@@ -968,20 +1354,11 @@ function loadReports(userId, containerId) {
                         // Service — minutes only, no marks (weekly pool)
                         const svcMins = e.serviceMinutes||0;
 
-                        // Pass/Fail badge — 40% is pass criteria
-                        const entryPct   = isNR ? -19 : (e.dayPercent ?? 0);
-                        const dayPass    = !isNR && entryPct >= 40;
-                        const pfBadge    = isNR
-                            ? `<span style="display:inline-block;padding:1px 7px;border-radius:20px;font-size:10px;font-weight:700;background:#fee2e2;color:#991b1b;white-space:nowrap;">NR</span>`
-                            : dayPass
-                                ? `<span style="display:inline-block;padding:1px 7px;border-radius:20px;font-size:10px;font-weight:700;background:#dcfce7;color:#15803d;white-space:nowrap;">✓ Pass</span>`
-                                : `<span style="display:inline-block;padding:1px 7px;border-radius:20px;font-size:10px;font-weight:700;background:#fee2e2;color:#dc2626;white-space:nowrap;">✗ Fail</span>`;
-
                         return `<tr style="background:${rowBg};">
-                            <td style="font-weight:600;white-space:nowrap;">${pfBadge}<br>${e.id.split('-').slice(1).reverse().join('/')}${editedBadge}</td>
-                            <td style="${isNR?'color:#b91c1c;font-weight:700;':''}">${e.sleepTime||'NR'}</td>${mkS(sc.sleep??0)}
-                            <td style="${isNR?'color:#b91c1c;':''}">${e.wakeupTime||'NR'}</td>${mkS(sc.wakeup??0)}
-                            <td>${e.chantingTime||'NR'}</td>${mkS(sc.chanting??0)}
+                            <td style="font-weight:600;background:${rowBg};">${e.id.split('-').slice(1).reverse().join('/')}${editedBadge}</td>
+                            <td style="${isNR?'color:#b91c1c;font-weight:700;':''}">${fmt12(e.sleepTime||'NR')}</td>${mkS(sc.sleep??0)}
+                            <td style="${isNR?'color:#b91c1c;':''}">${fmt12(e.wakeupTime||'NR')}</td>${mkS(sc.wakeup??0)}
+                            <td>${fmt12(e.chantingTime||'NR')}</td>${mkS(sc.chanting??0)}
                             <td>${e.readingMinutes||0}m</td>${mkBest(patS, patIsBest)}
                             <td>${e.hearingMinutes||0}m</td>${mkBest(hearS, hearIsBest)}
                             <td>${e.instrumentMinutes||0}m</td>${mkS(sc.instrument??0)}
@@ -1000,9 +1377,8 @@ function loadReports(userId, containerId) {
                     div.innerHTML = `
                         <div class="week-header" onclick="document.getElementById('${bodyId}').classList.toggle('open')">
                             <span style="white-space:nowrap;">📅 ${wk.range.replace('_',' ')}</span>
-                            <span style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;">
-                                <span style="font-size:11px;color:#6b7280;white-space:nowrap;">🛠️ ${svcTotal}min→${svcScore>=0?'+':''}${svcScore}</span>
-                                ${wkPfBadge}
+                            <span style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;">
+                                ${svcScore !== 0 ? `<span style="font-size:11px;color:#6b7280;white-space:nowrap;">${daySubtotal} 🛠️${svcScore>=0?'+':''}${svcScore} =</span>` : ''}
                                 <strong style="white-space:nowrap;color:${wkColor}">${wkTotal} / ${wkFD} (${wkPct}%) ▼</strong>
                             </span>
                         </div>
@@ -1036,13 +1412,14 @@ let myChartInstance    = null;
 let modalChartInstance = null;
 let progressModalUserId   = null;
 let progressModalUserName = null;
+let progressModalUserLevel = null;
 
-async function fetchChartData(userId, view) {
+async function fetchChartData(userId, view, level) {
     const snap = await db.collection('users').doc(userId).collection('sadhana')
         .orderBy(firebase.firestore.FieldPath.documentId()).get();
     const allEntries = [];
     snap.forEach(doc => {
-        if (doc.id >= APP_START) allEntries.push({ date: doc.id, score: doc.data().totalScore || 0 });
+        if (doc.id >= APP_START) allEntries.push({ date: doc.id, score: doc.data().totalScore || 0, bonus: doc.data().bonusTotal || 0, svcMins: doc.data().serviceMinutes || 0 });
     });
 
     if (view === 'daily') {
@@ -1053,7 +1430,7 @@ async function fetchChartData(userId, view) {
             const entry = allEntries.find(e => e.date === ds);
             if (i === 0 && !entry) continue; // skip today if not yet submitted
             labels.push(ds.split('-').slice(1).reverse().join('/'));
-            data.push(entry ? entry.score : -35);
+            data.push(entry ? entry.score + (entry.bonus||0) : -35);
         }
         return { labels, data, label:'Daily Score', max:160, color:'#3498db' };
     }
@@ -1061,19 +1438,21 @@ async function fetchChartData(userId, view) {
     if (view === 'weekly') {
         const labels = [], data = [];
         const todayStr = localDateStr(0);
+        const chartLevel = level || 'Level-1';
         for (let i = 11; i >= 0; i--) {
             const d  = new Date(); d.setDate(d.getDate() - i*7);
-            const wi = getWeekInfo(d.toISOString().split('T')[0]);
+            const wi = getWeekInfo(toLocalDS(d));
             if (wi.sunStr < APP_START) continue;
-            let tot = 0; let curr = new Date(wi.sunStr);
+            let tot = 0, svcMinsWeek = 0; let curr = new Date(wi.sunStr);
             for (let j=0;j<7;j++) {
-                const ds = curr.toISOString().split('T')[0];
+                const ds = toLocalDS(curr);
                 if (ds > todayStr) { curr.setDate(curr.getDate()+1); continue; }
                 const en = allEntries.find(e=>e.date===ds);
                 if (ds === todayStr && !en) { curr.setDate(curr.getDate()+1); continue; }
-                tot += en ? en.score : -30;
+                if (en) { tot += en.score + (en.bonus||0); svcMinsWeek += en.svcMins||0; } else { tot += -30; }
                 curr.setDate(curr.getDate()+1);
             }
+            tot += calcServiceWeekly(svcMinsWeek, chartLevel);
             labels.push(wi.label.split('_')[0].split(' to ')[0]);
             data.push(tot);
         }
@@ -1084,7 +1463,7 @@ async function fetchChartData(userId, view) {
         const monthMap = {};
         allEntries.forEach(en => {
             const ym = en.date.substring(0,7);
-            monthMap[ym] = (monthMap[ym]||0) + en.score;
+            monthMap[ym] = (monthMap[ym]||0) + en.score + (en.bonus||0);
         });
         const sorted = Object.keys(monthMap).sort();
         const labels = sorted.map(ym => {
@@ -1134,7 +1513,7 @@ function renderChart(canvasId, chartData, existingInstance) {
 }
 
 async function loadMyProgressChart(view) {
-    const data = await fetchChartData(currentUser.uid, view);
+    const data = await fetchChartData(currentUser.uid, view, userProfile?.level || 'Level-1');
     myChartInstance = renderChart('my-progress-chart', data, myChartInstance);
 }
 
@@ -1150,7 +1529,9 @@ window.openProgressModal = async (userId, userName) => {
     document.getElementById('progress-modal-title').textContent = `📈 ${userName} — Progress`;
     document.getElementById('progress-modal').classList.remove('hidden');
     document.querySelectorAll('#progress-modal-tabs .chart-tab-btn').forEach((b,i) => b.classList.toggle('active', i===0));
-    const data = await fetchChartData(userId, 'daily');
+    // Fetch the user's level so weekly chart includes service weekly correctly
+    try { const uSnap = await db.collection('users').doc(userId).get(); progressModalUserLevel = uSnap.data()?.level || 'Level-1'; } catch(e) { progressModalUserLevel = 'Level-1'; }
+    const data = await fetchChartData(userId, 'daily', progressModalUserLevel);
     modalChartInstance = renderChart('modal-progress-chart', data, modalChartInstance);
 };
 
@@ -1162,7 +1543,7 @@ window.closeProgressModal = () => {
 window.setModalChartView = async (view, btn) => {
     document.querySelectorAll('#progress-modal-tabs .chart-tab-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    const data = await fetchChartData(progressModalUserId, view);
+    const data = await fetchChartData(progressModalUserId, view, progressModalUserLevel || 'Level-1');
     modalChartInstance = renderChart('modal-progress-chart', data, modalChartInstance);
 };
 
@@ -1181,6 +1562,11 @@ document.getElementById('sadhana-form').onsubmit = async (e) => {
     let slp     = document.getElementById('sleep-time').value;
     const wak   = document.getElementById('wakeup-time').value;
     const chn   = document.getElementById('chanting-time').value;
+
+    if (!slp || !wak || !chn) {
+        showToast('Please select Bed Time, Wake Up Time and Chanting Time', 'error');
+        return;
+    }
     const rMin  = parseInt(document.getElementById('reading-mins').value)||0;
     const hMin  = parseInt(document.getElementById('hearing-mins').value)||0;
     const sMin  = parseInt(document.getElementById('service-mins')?.value)||0;
@@ -1194,7 +1580,7 @@ document.getElementById('sadhana-form').onsubmit = async (e) => {
         const [sh] = slp.split(':').map(Number);
         if (sh >= 4 && sh <= 20) {
             const goAhead = confirm(
-                `⚠️ Bed Time Warning\n\nYou entered "${slp}" as bed time.\nThis looks like a daytime hour.\n\nDid you mean night time? e.g. 23:00 instead of 11:00?\n\nTap OK if "${slp}" is correct.\nTap Cancel to go back and fix it.`
+                `⚠️ Bed Time Warning\n\nYou entered "${fmt12(slp)}" as bed time.\nThis looks like a daytime hour.\n\nDid you mean night time? e.g. 11:00 PM instead of 11:00 AM?\n\nTap OK if "${fmt12(slp)}" is correct.\nTap Cancel to go back and fix it.`
             );
             if (!goAhead) return;
         }
@@ -1227,22 +1613,55 @@ document.getElementById('sadhana-form').onsubmit = async (e) => {
 
     const bonusTotal = Object.values(bonus).reduce((s,v)=>s+v,0);
 
-    await db.collection('users').doc(currentUser.uid).collection('sadhana').doc(date).set({
-        sleepTime: slp, wakeupTime: wak, chantingTime: chn,
-        readingMinutes: rMin, hearingMinutes: hMin,
-        serviceMinutes: sMin, serviceText: svcTxt,
-        notesMinutes: nMin, instrumentMinutes: instMin,
-        daySleepMinutes: dsMin,
-        scores: result.sc, totalScore: result.total,
-        bonus, bonusTotal,
-        dayPercent: result.dayPercent,
-        bestOf: result.bestIs,
-        levelAtSubmission: level, instrument,
-        submittedAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
-    alert(`✅ Submitted!\nScore: ${result.total} + Bonus: ${bonusTotal} = ${result.total+bonusTotal} (${result.dayPercent}%)`);
-    switchTab('reports');
+    try {
+        await db.collection('users').doc(currentUser.uid).collection('sadhana').doc(date).set({
+            sleepTime: slp, wakeupTime: wak, chantingTime: chn,
+            readingMinutes: rMin, hearingMinutes: hMin,
+            serviceMinutes: sMin, serviceText: svcTxt,
+            notesMinutes: nMin, instrumentMinutes: instMin,
+            daySleepMinutes: dsMin,
+            scores: result.sc, totalScore: result.total,
+            bonus, bonusTotal,
+            dayPercent: result.dayPercent,
+            bestOf: result.bestIs,
+            levelAtSubmission: level, instrument,
+            submittedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        if (!userProfile.joinedDate) {
+            db.collection('users').doc(currentUser.uid).update({ joinedDate: date });
+        }
+        showSubmitSuccess(result.total, bonusTotal, result.dayPercent);
+    } catch(err) {
+        showToast('❌ Failed to submit: ' + err.message, 'error');
+    }
 };
+
+function showSubmitSuccess(score, bonus, pct) {
+    const overlay = document.getElementById('submit-success-overlay');
+    if (!overlay) { switchSadhanaTab('reports'); return; }
+    const dailyMax = getDailyMax(userProfile?.level || 'Level-1');
+    const total = score + (bonus || 0);
+    document.getElementById('ss-score').textContent = total;
+    document.getElementById('ss-max').textContent = 'out of ' + dailyMax + ' pts';
+    document.getElementById('ss-pct').textContent = pct + '%';
+    const msgs = [
+        'Jai Shri Krishna! Keep up the devotion 🙏',
+        'Wonderful! Every sadhana brings you closer ✨',
+        'Hare Krishna! Your efforts are counted 📿',
+        'Well done! Guru is pleased with your practice 🙌',
+        'Beautiful! Consistency is the key to progress 💪'
+    ];
+    document.getElementById('ss-msg').textContent = msgs[Math.floor(Math.random() * msgs.length)];
+    const bar = document.getElementById('ss-bar');
+    bar.style.width = '0';
+    overlay.classList.add('visible');
+    requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.width = Math.min(Math.max(pct,0), 100) + '%'; }));
+    setTimeout(() => {
+        overlay.classList.remove('visible');
+        bar.style.width = '0';
+        switchTab('home'); // Go to home so user sees updated stats
+    }, 2800);
+}
 
 // ═══════════════════════════════════════════════════════════
 // 10. ADMIN PANEL
@@ -1357,17 +1776,17 @@ window.filterReports = () => {
     });
 };
 async function loadAdminPanel() {
+    try {
     const tableBox        = document.getElementById('admin-comparative-reports-container');
     const usersList       = document.getElementById('admin-users-list');
     const inactiveCont    = document.getElementById('admin-inactive-container');
-    tableBox.innerHTML    = '<p style="color:#aaa;text-align:center;padding:20px;">Loading…</p>';
-    usersList.innerHTML   = '<p style="color:#aaa;text-align:center;padding:20px;">Loading…</p>';
+    if (tableBox) tableBox.innerHTML    = '<p style="color:#aaa;text-align:center;padding:20px;">Loading…</p>';
+    if (usersList) usersList.innerHTML   = '<p style="color:#aaa;text-align:center;padding:20px;">Loading…</p>';
     if (inactiveCont) inactiveCont.innerHTML = '';
 
     const weeks = [];
     for (let i=0;i<4;i++) {
-        const d=new Date(); d.setDate(d.getDate()-i*7);
-        weeks.push(getWeekInfo(d.toISOString().split('T')[0]));
+        weeks.push(getWeekInfo(localDateStr(i*7)));
     }
     weeks.reverse();
 
@@ -1376,7 +1795,7 @@ async function loadAdminPanel() {
         .filter(doc => {
             const d = doc.data();
             // Exclude all admins — only show regular users in reports/management
-            if (d.role === 'superAdmin' || d.role === 'teamLeader') return false;
+            if (d.role === 'superAdmin' || d.role === 'deptAdmin' || d.role === 'overallTeamLeader' || d.role === 'teamLeader' || d.role === 'admin') return false;
             return matchesScope(d);
         })
         .sort((a,b) => (a.data().name||'').localeCompare(b.data().name||''));
@@ -1405,16 +1824,16 @@ async function loadAdminPanel() {
     banner.className = `info-banner ${isSuperAdmin()?'banner-purple':'banner-blue'}`;
     const scope = getAdminScope();
     banner.innerHTML = isSuperAdmin()
-        ? '👑 <strong>Super Admin</strong> — All teams, full role management'
-        : `👥 <strong>Team Leader</strong> — Team: <strong>${userProfile.team||''}</strong>`;
+        ? '👑 <strong>Super Admin</strong> — All departments, full role management'
+        : isDeptAdmin()
+        ? `🛡️ <strong>Dept Admin</strong> — Department: <strong>${userProfile.department||''}</strong>`
+        : isOverallTeamLeader()
+        ? `🌐 <strong>Overall Team Leader</strong> — Team: <strong>${userProfile.team||''}</strong> (all departments)`
+        : `👥 <strong>Team Leader</strong> — Team: <strong>${userProfile.team||''}</strong> · Dept: <strong>${userProfile.department||''}</strong>`;
     usersList.appendChild(banner);
 
-    // Category filter — only visible to super admin
-    const catFilter = document.getElementById('admin-category-filter');
-    if (catFilter) catFilter.style.display = isSuperAdmin() ? '' : 'none';
     const searchInput = document.getElementById('admin-search-input');
     if (searchInput) searchInput.value = '';
-    if (catFilter) catFilter.value = '';
 
     // ── INACTIVE DEVOTEES SECTION ─────────────────────────
     // Calculate consecutive missing days (excluding today) per user
@@ -1424,13 +1843,19 @@ async function loadAdminPanel() {
     // Each entry: { id, name, level, lastDate, missedDays }
     const inactiveUsers = [];
     const userSadhanaCache = new Map();
+    window._adminCmpUserList = [];
 
-    // Fetch sadhana data in batches of 10 — parallel but safe from rate limits
+    // Fetch sadhana data in batches — only last 4 weeks for WCR performance
     const allSadhanaSnaps = [];
-    const BATCH = 10;
+    const BATCH = 25;
+    const fourWeeksAgo = localDateStr(28);
     for (let i = 0; i < filtered.length; i += BATCH) {
         const batch = filtered.slice(i, i + BATCH);
-        const snaps = await Promise.all(batch.map(uDoc => uDoc.ref.collection('sadhana').get()));
+        const snaps = await Promise.all(batch.map(uDoc =>
+            uDoc.ref.collection('sadhana')
+                .where(firebase.firestore.FieldPath.documentId(), '>=', fourWeeksAgo)
+                .get()
+        ));
         allSadhanaSnaps.push(...snaps);
     }
 
@@ -1438,8 +1863,10 @@ async function loadAdminPanel() {
         const uDoc  = filtered[idx];
         const u     = uDoc.data();
         const sSnap = allSadhanaSnaps[idx];
-        const ents  = sSnap.docs.map(d=>({date:d.id, score:d.data().totalScore||0, sleepTime:d.data().sleepTime||''}));
-        userSadhanaCache.set(uDoc.id, ents);
+        // Use Map for O(1) date lookups
+        const entsMap = new Map();
+        sSnap.docs.forEach(d => entsMap.set(d.id, { score: d.data().totalScore||0, bonus: d.data().bonusTotal||0, svcMins: d.data().serviceMinutes||0, sleepTime: d.data().sleepTime||'' }));
+        userSadhanaCache.set(uDoc.id, Array.from(entsMap.entries()).map(([date, v]) => ({ date, ...v })));
 
         const submittedDates = new Set(sSnap.docs.map(d => d.id).filter(d => d >= APP_START));
         let missedDays = 0;
@@ -1455,25 +1882,31 @@ async function loadAdminPanel() {
             inactiveUsers.push({ id: uDoc.id, name: u.name, level: u.level||'Level-1', dept: u.department||'', team: u.team||'', lastDate, missedDays });
         }
 
-        const rowIdx = filtered.indexOf(uDoc);
-        const stripeBg = rowIdx % 2 === 0 ? '#ffffff' : '#f8fafc';
+        const stripeBg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
+        const cmpIdx = window._adminCmpUserList.length;
+        window._adminCmpUserList.push({
+            uid: uDoc.id, name: u.name||'', level: u.level||'Level-1',
+            chanting: u.chantingCategory||'', rounds: u.exactRounds||'0',
+            role: u.role||'user', dept: u.department||'', team: u.team||''
+        });
         tHtml += `<tr style="background:${stripeBg}">
-            <td class="comp-td comp-name">${u.name}</td>
+            <td class="comp-td comp-name" onclick="openAdminCmpUser(${cmpIdx})" style="cursor:pointer;" title="View ${u.name}">${u.name}</td>
             <td class="comp-td comp-meta">${u.level||'L1'}</td>
             <td class="comp-td comp-meta">${u.department||'-'}</td>
             <td class="comp-td comp-meta">${u.team||'-'}</td>
             <td class="comp-td comp-meta">${u.chantingCategory||'N/A'}</td>`;
         weeks.forEach(w => {
-            let tot=0; let curr=new Date(w.sunStr);
+            let tot=0, svcMinsWeek=0; let curr=new Date(w.sunStr);
             const weekEnts=[];
             const todayComp = localDateStr(0);
             for (let i=0;i<7;i++) {
-                const ds=curr.toISOString().split('T')[0];
-                if (ds < APP_START) { curr.setDate(curr.getDate()+1); continue; } // skip pre-app
-                if (ds > todayComp) { curr.setDate(curr.getDate()+1); continue; } // skip future
-                const en=ents.find(e=>e.date===ds);
+                const ds=toLocalDS(curr);
+                if (ds < APP_START) { curr.setDate(curr.getDate()+1); continue; }
+                if (ds > todayComp) { curr.setDate(curr.getDate()+1); continue; }
+                const en = entsMap.get(ds);
                 if (en) {
-                    tot += en.score;
+                    tot += en.score + (en.bonus||0);
+                    svcMinsWeek += en.svcMins||0;
                     weekEnts.push({id:ds, sleepTime:en.sleepTime||'', score:en.score});
                 } else if (ds < todayComp) {
                     tot += -30; // past day NR (matches getNRData totalScore)
@@ -1481,6 +1914,7 @@ async function loadAdminPanel() {
                 // today not submitted — skip (not in fd either)
                 curr.setDate(curr.getDate()+1);
             }
+            tot += calcServiceWeekly(svcMinsWeek, u.level||'Level-1');
             const fd = fairDenominator(w.sunStr, weekEnts, u.level||'Level-1');
             const pct = Math.round((tot/fd)*100);
             const ps  = pctStyle(pct);
@@ -1493,8 +1927,10 @@ async function loadAdminPanel() {
         card.className = 'user-card';
 
         let badge = '';
-        if (u.role==='superAdmin')  badge=`<span class="role-badge" style="background:#7e22ce;color:white;">👑 Super Admin</span>`;
-        else if (u.role==='teamLeader') badge=`<span class="role-badge" style="background:#1e8449;color:white;">👥 Team Leader (${u.team||''})</span>`;
+        if (u.role==='superAdmin')          badge=`<span class="role-badge" style="background:#7e22ce;color:white;">👑 Super Admin</span>`;
+        else if (u.role==='deptAdmin')       badge=`<span class="role-badge" style="background:#1a5276;color:white;">🛡️ Dept Admin (${u.department||''})</span>`;
+        else if (u.role==='overallTeamLeader') badge=`<span class="role-badge" style="background:#0369a1;color:white;">🌐 Overall TL (${u.team||''})</span>`;
+        else if (u.role==='teamLeader')      badge=`<span class="role-badge" style="background:#1e8449;color:white;">👥 TL (${u.team||''} · ${u.department||''})</span>`;
 
         const safe = (u.name||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
 
@@ -1580,12 +2016,26 @@ async function loadAdminPanel() {
 
     tableBox.innerHTML = tHtml + '</tbody></table>';
 
+    // Build performers ring charts (admin WCR)
+    computePerformers(filtered, userSadhanaCache);
+
     // Apply filters if already set (handles first-time filter before data loaded)
     requestAnimationFrame(() => {
         filterReports();
         filterAdminUsers();
         filterInactiveUsers();
     });
+    } catch(err) {
+        console.error('loadAdminPanel error:', err);
+        adminPanelLoaded = false;
+        const tableBox = document.getElementById('admin-comparative-reports-container');
+        const usersList = document.getElementById('admin-users-list');
+        const inactiveCont = document.getElementById('admin-inactive-container');
+        const errMsg = '<p style="color:#dc2626;text-align:center;padding:20px;">Error loading: ' + (err.message||err) + '</p>';
+        if (tableBox) tableBox.innerHTML = errMsg;
+        if (usersList) usersList.innerHTML = errMsg;
+        if (inactiveCont) inactiveCont.innerHTML = errMsg;
+    }
 }
 
 // ── ADMIN MANAGEMENT ────────────────────────────────────────
@@ -1597,9 +2047,9 @@ async function loadAdminMgmt() {
     const snap = await db.collection('users').get();
     const admins = snap.docs
         .map(d => ({ id: d.id, ...d.data() }))
-        .filter(u => u.role === 'superAdmin' || u.role === 'teamLeader')
+        .filter(u => u.role === 'superAdmin' || u.role === 'deptAdmin' || u.role === 'overallTeamLeader' || u.role === 'teamLeader' || u.role === 'admin')
         .sort((a,b) => {
-            const order = { superAdmin: 0, teamLeader: 1 };
+            const order = { superAdmin: 0, deptAdmin: 1, overallTeamLeader: 2, teamLeader: 3 };
             return (order[a.role]||3) - (order[b.role]||3) || (a.name||'').localeCompare(b.name||'');
         });
 
@@ -1611,21 +2061,44 @@ async function loadAdminMgmt() {
     container.innerHTML = admins.map(u => {
         const roleBadge = u.role === 'superAdmin'
             ? '<span style="background:#7e22ce;color:white;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;">👑 Super Admin</span>'
-            : `<span style="background:#1e8449;color:white;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;">👥 Team Leader — ${u.team||''}</span>`;
+            : u.role === 'deptAdmin'
+            ? `<span style="background:#1a5276;color:white;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;">🛡️ Dept Admin — ${u.department||''}</span>`
+            : u.role === 'overallTeamLeader'
+            ? `<span style="background:#0369a1;color:white;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;">🌐 Overall TL — ${u.team||''}</span>`
+            : `<span style="background:#1e8449;color:white;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;">👥 Team Leader — ${u.team||''} (${u.department||''})</span>`;
 
-        // Role change dropdown — only superAdmin can change roles
+        // Role change dropdown — only superAdmin can change all; deptAdmin can change within dept
         let roleOpts = '<option value="" disabled selected>Change Role…</option>';
         if (isSuperAdmin()) {
             if (u.role !== 'superAdmin') roleOpts += `<option value="superAdmin">👑 Make Super Admin</option>`;
+            roleOpts += '<optgroup label="🛡️ Dept Admin">';
+            ['IGF','IYF','ICF_MTG','ICF_PRJI'].forEach(dept =>
+                roleOpts += `<option value="deptAdmin:${dept}">🛡️ ${dept}</option>`
+            );
+            roleOpts += '</optgroup>';
+            const allTeams = [...new Set(Object.values(DEPT_TEAMS).flat().filter(t => t !== 'Other'))];
+            allTeams.push('Other');
+            roleOpts += '<optgroup label="🌐 Overall Team Leader (all depts)">';
+            allTeams.forEach(team =>
+                roleOpts += `<option value="overallTeamLeader:${team}">🌐 ${team} — All Depts</option>`
+            );
+            roleOpts += '</optgroup>';
+            roleOpts += '<optgroup label="👥 Team Leader (dept-specific)">';
             ['IGF','IYF','ICF_MTG','ICF_PRJI'].forEach(dept => {
-                TEAMS.forEach(team =>
-                    roleOpts += `<option value="teamLeader:${dept}:${team}">👥 Team Leader — ${team} (${dept})</option>`
+                if (DEPT_TEAMS[dept]) DEPT_TEAMS[dept].forEach(team =>
+                    roleOpts += `<option value="teamLeader:${dept}:${team}">👥 ${team} (${dept})</option>`
                 );
             });
+            roleOpts += '</optgroup>';
+            roleOpts += '<option value="demote">🚫 Revoke to User</option>';
+        } else if (isDeptAdmin() && u.department === userProfile.department && u.role !== 'superAdmin') {
+            if (DEPT_TEAMS[userProfile.department]) DEPT_TEAMS[userProfile.department].forEach(team =>
+                roleOpts += `<option value="teamLeader:${userProfile.department}:${team}">👥 TL — ${team}</option>`
+            );
             roleOpts += '<option value="demote">🚫 Revoke to User</option>';
         }
 
-        const canChange = isSuperAdmin();
+        const canChange = isSuperAdmin() || (isDeptAdmin() && u.department === userProfile.department && u.role !== 'superAdmin');
         const safe = (u.name||'').replace(/'/g,"\'");
 
         return `<div class="user-card">
@@ -1658,7 +2131,15 @@ window.handleRoleDropdown = async (uid, sel) => {
 
     if (val === 'superAdmin') {
         newRole = 'superAdmin';
-        msg = '👑 Make this user SUPER ADMIN?\nFull access to all teams.';
+        msg = '👑 Make this user SUPER ADMIN?\nFull access to all departments.';
+    } else if (val.startsWith('deptAdmin:')) {
+        newRole = 'deptAdmin';
+        dept    = val.split(':')[1];
+        msg     = `🛡️ Assign as Dept Admin for: ${dept}?`;
+    } else if (val.startsWith('overallTeamLeader:')) {
+        newRole = 'overallTeamLeader';
+        team    = val.split(':')[1];
+        msg     = `🌐 Assign as Overall Team Leader for team: ${team} (across ALL departments)?`;
     } else if (val.startsWith('teamLeader:')) {
         const parts = val.split(':');
         newRole = 'teamLeader';
@@ -1696,30 +2177,52 @@ window.openEditModal = async (userId, date) => {
 
     const docRef  = db.collection('users').doc(userId).collection('sadhana').doc(date);
     const docSnap = await docRef.get();
-    if (!docSnap.exists) { alert('Entry not found.'); return; }
 
-    const d = docSnap.data();
-    editModalOriginal = { ...d }; // snapshot of original before edit
+    // NR entries: docSnap may not exist — create a blank NR record to edit
+    let d;
+    if (!docSnap.exists) {
+        // Check if it's an NR day (past day, no entry) — allow editing
+        d = {
+            sleepTime: '', wakeupTime: '', chantingTime: '',
+            readingMinutes: 0, hearingMinutes: 0, serviceMinutes: 0,
+            notesMinutes: 0, daySleepMinutes: 0, instrumentMinutes: 0,
+            totalScore: -30, isNR: true
+        };
+    } else {
+        d = docSnap.data();
+    }
+    editModalOriginal = { ...d };
 
     // Fetch user's level for scoring context
-    const uSnap   = await db.collection('users').doc(userId).get();
-    const uLevel  = uSnap.exists ? (uSnap.data().level || 'Level-4') : 'Level-4';
+    const uSnap  = await db.collection('users').doc(userId).get();
+    const uLevel = uSnap.exists ? (uSnap.data().level || 'Level-4') : 'Level-4';
     document.getElementById('edit-user-level').value = uLevel;
 
-    // Populate fields
-    document.getElementById('edit-sleep-time').value      = d.sleepTime      || '';
-    document.getElementById('edit-wakeup-time').value     = d.wakeupTime     || '';
-    document.getElementById('edit-chanting-time').value   = d.chantingTime   || '';
-    document.getElementById('edit-reading-mins').value    = d.readingMinutes  || 0;
-    document.getElementById('edit-hearing-mins').value    = d.hearingMinutes  || 0;
-    document.getElementById('edit-service-mins').value    = d.serviceMinutes  || 0;
-    document.getElementById('edit-notes-mins').value      = d.notesMinutes    || 0;
-    document.getElementById('edit-day-sleep-mins').value  = d.daySleepMinutes || 0;
-    document.getElementById('edit-reason').value          = '';
+    // Build AM/PM time pickers (rebuild each time modal opens)
+    buildTimePicker('edit-sleep-time-picker',    'edit-sleep-time',    updateEditPreview);
+    buildTimePicker('edit-wakeup-time-picker',   'edit-wakeup-time',   updateEditPreview);
+    buildTimePicker('edit-chanting-time-picker', 'edit-chanting-time', updateEditPreview);
 
-    // Get user name from admin panel context
+    // Set time values (handles NR/empty gracefully)
+    const slpVal = (d.sleepTime    && d.sleepTime    !== 'NR') ? d.sleepTime    : '';
+    const wakVal = (d.wakeupTime   && d.wakeupTime   !== 'NR') ? d.wakeupTime   : '';
+    const chnVal = (d.chantingTime && d.chantingTime !== 'NR') ? d.chantingTime : '';
+    setTimePicker('edit-sleep-time-picker',    'edit-sleep-time',    slpVal);
+    setTimePicker('edit-wakeup-time-picker',   'edit-wakeup-time',   wakVal);
+    setTimePicker('edit-chanting-time-picker', 'edit-chanting-time', chnVal);
+
+    // Populate other fields
+    document.getElementById('edit-reading-mins').value   = d.readingMinutes  || 0;
+    document.getElementById('edit-hearing-mins').value   = d.hearingMinutes  || 0;
+    document.getElementById('edit-service-mins').value   = d.serviceMinutes  || 0;
+    document.getElementById('edit-notes-mins').value     = d.notesMinutes    || 0;
+    document.getElementById('edit-day-sleep-mins').value = d.daySleepMinutes || 0;
+    document.getElementById('edit-reason').value         = '';
+
+    // Title
     const uData = uSnap.exists ? uSnap.data() : {};
-    document.getElementById('edit-modal-title').textContent = `✏️ Edit Sadhana — ${uData.name||userId} · ${date}`;
+    const nrTag = (!docSnap.exists || d.sleepTime === 'NR') ? ' 🔴 NR' : '';
+    document.getElementById('edit-modal-title').textContent = `✏️ Edit Sadhana — ${uData.name||userId} · ${date}${nrTag}`;
 
     // Show/hide notes field based on level
     document.getElementById('edit-notes-row').classList.toggle('hidden', uLevel !== 'Level-4');
@@ -1766,14 +2269,11 @@ window.submitEditSadhana = async () => {
     const reason= document.getElementById('edit-reason').value.trim();
     const level = document.getElementById('edit-user-level').value || 'Level-4';
 
-    if (!slp||!wak||!chn) { alert('Please fill all time fields.'); return; }
+    if (!slp||!wak||!chn) { showToast('Please fill all three time fields', 'error'); return; }
     if (!confirm(`Save changes to ${editModalDate}?\nThis will update scores and log edit history.`)) return;
 
     const { sc, total, dayPercent } = calculateScores(slp, wak, chn, rMin, hMin, sMin, nMin, dsMin, level);
 
-    // Build edit log entry — store original data
-    // NOTE: serverTimestamp() cannot be used inside arrayUnion nested objects
-    // So we use JS Date string for the log entry timestamp instead
     const now = new Date().toISOString();
     const editLog = {
         editedBy:    userProfile.name,
@@ -1789,16 +2289,16 @@ window.submitEditSadhana = async () => {
             serviceMinutes:  editModalOriginal.serviceMinutes  || 0,
             notesMinutes:    editModalOriginal.notesMinutes    || 0,
             daySleepMinutes: editModalOriginal.daySleepMinutes || 0,
-            totalScore:      editModalOriginal.totalScore      || 0,
+            totalScore:      editModalOriginal.totalScore      || -30,
             dayPercent:      editModalOriginal.dayPercent      || 0
         }
     };
 
     try {
         const docRef = db.collection('users').doc(editModalUserId).collection('sadhana').doc(editModalDate);
+        const docSnap = await docRef.get();
 
-        // Step 1: Update all field values (serverTimestamp safe here at top level)
-        await docRef.update({
+        const payload = {
             sleepTime:       slp,
             wakeupTime:      wak,
             chantingTime:    chn,
@@ -1811,17 +2311,29 @@ window.submitEditSadhana = async () => {
             totalScore:      total,
             dayPercent:      dayPercent,
             editedAt:        firebase.firestore.FieldValue.serverTimestamp(),
-            editedBy:        userProfile.name
-        });
+            editedBy:        userProfile.name,
+            editLog:         firebase.firestore.FieldValue.arrayUnion(editLog)
+        };
 
-        // Step 2: Append to editLog array separately
-        // (arrayUnion cannot contain serverTimestamp inside nested objects — so we use ISO string in editLog)
-        await docRef.update({
-            editLog: firebase.firestore.FieldValue.arrayUnion(editLog)
-        });
+        if (!docSnap.exists) {
+            // NR entry — create new doc
+            await docRef.set({
+                ...payload,
+                date: editModalDate,
+                userId: editModalUserId,
+                wasNR: true
+            });
+        } else {
+            // Existing entry — update
+            await docRef.update(payload);
+        }
 
         closeEditModal();
         alert(`✅ Sadhana updated!\nNew Score: ${total} (${dayPercent}%)`);
+        // Refresh admin panel so WCR table and performers ring reflect the edit
+        adminPanelLoaded = false;
+        _userWCRLoaded = false;
+        loadAdminPanel();
     } catch (err) {
         console.error('Edit save error:', err);
         alert('❌ Save failed: ' + err.message);
@@ -1886,8 +2398,13 @@ window.showEditHistory = async (evt, date, userId) => {
             } else {
                 html += `<table class="eh-table"><thead><tr><th>Field</th><th>Before</th><th>After</th></tr></thead><tbody>`;
                 changedFields.forEach(f => {
-                    const oval = o[f.oKey] ?? '—';
-                    const cval = cur[f.cKey] ?? '—';
+                    let oval = o[f.oKey] ?? '—';
+                    let cval = cur[f.cKey] ?? '—';
+                    // Format time fields as AM/PM
+                    if (['sleepTime','wakeupTime','chantingTime'].includes(f.oKey)) {
+                        oval = fmt12(oval);
+                        cval = fmt12(cval);
+                    }
                     html += `<tr><td class="eh-field">${f.label}</td><td class="eh-before">${oval}</td><td class="eh-after">${cval}</td></tr>`;
                 });
                 html += `</tbody></table>`;
@@ -1920,23 +2437,44 @@ window.openDevoteeProfile = async (userId, userName) => {
     const initials = (u.name||userName).split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase();
 
     // Role badge
-    const roleLbl = u.role==='superAdmin' ? '👑 Super Admin'
-        : u.role==='teamLeader' ? `👥 Team Leader — ${u.team||''}`
+    const roleLbl = u.role==='superAdmin'        ? '👑 Super Admin'
+        : u.role==='deptAdmin'         ? `🛡️ Dept Admin — ${u.department||''}`
+        : u.role==='overallTeamLeader' ? `🌐 Overall TL — ${u.team||''}`
+        : u.role==='teamLeader'        ? `👥 Team Leader — ${u.team||''} (${u.department||''})`
         : '👤 User';
-    const roleColor = u.role==='superAdmin'?'#7e22ce':u.role==='teamLeader'?'#1e8449':'#374151';
+    const roleColor = u.role==='superAdmin'?'#7e22ce':u.role==='deptAdmin'?'#1a5276':u.role==='overallTeamLeader'?'#0369a1':u.role==='teamLeader'?'#1e8449':'#374151';
 
     // Build role change dropdown options
     let roleOpts = '<option value="" disabled selected>Change Role…</option>';
     if (isSuperAdmin()) {
         if (u.role !== 'superAdmin') roleOpts += `<option value="superAdmin">👑 Make Super Admin</option>`;
+        roleOpts += '<optgroup label="🛡️ Dept Admin">';
+        ['IGF','IYF','ICF_MTG','ICF_PRJI'].forEach(dept =>
+            roleOpts += `<option value="deptAdmin:${dept}">🛡️ ${dept}</option>`
+        );
+        roleOpts += '</optgroup>';
+        const allTeams2 = [...new Set(Object.values(DEPT_TEAMS).flat().filter(t => t !== 'Other'))];
+        allTeams2.push('Other');
+        roleOpts += '<optgroup label="🌐 Overall Team Leader (all depts)">';
+        allTeams2.forEach(team =>
+            roleOpts += `<option value="overallTeamLeader:${team}">🌐 ${team} — All Depts</option>`
+        );
+        roleOpts += '</optgroup>';
+        roleOpts += '<optgroup label="👥 Team Leader (dept-specific)">';
         ['IGF','IYF','ICF_MTG','ICF_PRJI'].forEach(dept => {
-            TEAMS.forEach(team =>
-                roleOpts += `<option value="teamLeader:${dept}:${team}">👥 TL — ${team} (${dept})</option>`
+            if (DEPT_TEAMS[dept]) DEPT_TEAMS[dept].forEach(team =>
+                roleOpts += `<option value="teamLeader:${dept}:${team}">👥 ${team} (${dept})</option>`
             );
         });
+        roleOpts += '</optgroup>';
+        roleOpts += '<option value="demote">🚫 Revoke to User</option>';
+    } else if (isDeptAdmin() && u.department === userProfile.department && u.role !== 'superAdmin') {
+        if (DEPT_TEAMS[userProfile.department]) DEPT_TEAMS[userProfile.department].forEach(team =>
+            roleOpts += `<option value="teamLeader:${userProfile.department}:${team}">👥 TL — ${team}</option>`
+        );
         roleOpts += '<option value="demote">🚫 Revoke to User</option>';
     }
-    const canChangeRole = isSuperAdmin();
+    const canChangeRole = isSuperAdmin() || (isDeptAdmin() && u.department === userProfile.department && u.role !== 'superAdmin');
     const canDelete = isSuperAdmin();
 
     document.getElementById('dp-initials').textContent = initials;
@@ -2046,6 +2584,7 @@ window.toggleRejectEntry = async (userId, dateStr, isCurrentlyRejected) => {
                 rejected: false,
                 totalScore: d.originalTotalScore ?? d.totalScore,
                 dayPercent: d.originalDayPercent ?? d.dayPercent,
+                bonusTotal: d.originalBonusTotal ?? d.bonusTotal ?? 0,
                 revokedAt: firebase.firestore.FieldValue.serverTimestamp(),
                 revokedBy: userProfile.name
             });
@@ -2055,7 +2594,7 @@ window.toggleRejectEntry = async (userId, dateStr, isCurrentlyRejected) => {
         // REJECT
         const reason = prompt(`🚫 Reject entry for ${dateStr}?\n\nEnter reason (required):`);
         if (!reason?.trim()) { showToast('Rejection cancelled — reason required', 'warn'); return; }
-        if (!confirm(`Apply −30 penalty and reject this entry?\nReason: ${reason}`)) return;
+        if (!confirm(`Apply −50 penalty and reject this entry?\nReason: ${reason}`)) return;
         try {
             const docSnap = await db.collection('users').doc(userId).collection('sadhana').doc(dateStr).get();
             const d = docSnap.data();
@@ -2066,8 +2605,10 @@ window.toggleRejectEntry = async (userId, dateStr, isCurrentlyRejected) => {
                 rejectionReason: reason.trim(),
                 originalTotalScore: d.totalScore ?? 0,
                 originalDayPercent: d.dayPercent ?? 0,
-                totalScore: -30,
-                dayPercent: -19
+                originalBonusTotal: d.bonusTotal ?? 0,
+                totalScore: -50,
+                dayPercent: -31,
+                bonusTotal: 0
             });
             showToast('🚫 Entry rejected!', 'success');
         } catch(err) { showToast('❌ ' + err.message, 'error'); }
@@ -2112,7 +2653,7 @@ function refreshFormFields() {
     // Sunday bonus — show only if today is Sunday
     const todayDay = new Date().getDay();
     const selectedDate = document.getElementById('sadhana-date')?.value;
-    const selDay = selectedDate ? new Date(selectedDate).getDay() : -1;
+    const selDay = selectedDate ? (() => { const [y,m,d] = selectedDate.split('-').map(Number); return new Date(y,m-1,d).getDay(); })() : -1;
     const isSunday = selDay === 0;
     const sundayArea = document.getElementById('sunday-bonus-area');
     if (sundayArea) sundayArea.classList.toggle('hidden', !isSunday);
@@ -2143,7 +2684,13 @@ function refreshFormFields() {
 // Re-check Sunday bonus when date changes
 document.addEventListener('DOMContentLoaded', () => {
     const dateEl = document.getElementById('sadhana-date');
-    if (dateEl) dateEl.addEventListener('change', refreshFormFields);
+    if (dateEl) dateEl.addEventListener('change', () => {
+        refreshFormFields();
+        // Clear time pickers on date change
+        setTimePicker('sleep-time-picker',    'sleep-time',    '');
+        setTimePicker('wakeup-time-picker',   'wakeup-time',   '');
+        setTimePicker('chanting-time-picker', 'chanting-time', '');
+    });
 });
 document.getElementById('profile-form').onsubmit = async (e) => {
     e.preventDefault();
@@ -2157,6 +2704,7 @@ document.getElementById('profile-form').onsubmit = async (e) => {
         instrument:       document.getElementById('profile-instrument').value || '',
         role:             userProfile?.role || 'user'
     };
+    if (window._profilePicDataUrl) data.photoURL = window._profilePicDataUrl;
     if (!data.name)       { alert('Please enter your name.'); return; }
     if (!data.department || !data.team) { alert('Please select Department and Team.'); return; }
     await db.collection('users').doc(currentUser.uid).set(data, { merge: true });
@@ -2221,12 +2769,53 @@ window.submitPasswordChange = async () => {
 // ═══════════════════════════════════════════════════════════
 // 14. MISC BINDINGS
 // ═══════════════════════════════════════════════════════════
+function friendlyAuthError(err) {
+    const map = {
+        'auth/invalid-email':           'The email address is not valid. Please check and try again.',
+        'auth/user-disabled':           'This account has been disabled. Please contact your coordinator.',
+        'auth/user-not-found':          'No account found with this email. Please check the email or sign up first.',
+        'auth/wrong-password':          'Incorrect password. Please try again.',
+        'auth/invalid-credential':      'Incorrect email or password. Please check and try again.',
+        'auth/email-already-in-use':    'An account with this email already exists. Try logging in instead.',
+        'auth/weak-password':           'Password is too weak. Please use at least 6 characters.',
+        'auth/too-many-requests':       'Too many failed attempts. Please wait a few minutes and try again.',
+        'auth/network-request-failed':  'No internet connection. Please check your network and try again.',
+        'auth/requires-recent-login':   'For security, please log out and log back in before trying this.',
+        'auth/operation-not-allowed':   'This sign-in method is not enabled. Please contact support.',
+        'auth/invalid-action-code':     'This link has expired or already been used. Please request a new one.',
+        'auth/expired-action-code':     'This link has expired. Please request a new password reset link.',
+    };
+    return map[err.code] || 'Something went wrong. Please try again later.';
+}
+
+// Clear login error when user types
+['login-email','login-password'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', () => {
+        const m = document.getElementById('login-msg');
+        if (m) m.style.display = 'none';
+    });
+});
+
 document.getElementById('login-form').onsubmit = (e) => {
     e.preventDefault();
+    const btn = document.getElementById('login-btn');
+    const msgEl = document.getElementById('login-msg');
+    btn.disabled = true;
+    btn.textContent = 'Logging in…';
+    msgEl.style.display = 'none';
     auth.signInWithEmailAndPassword(
-        document.getElementById('login-email').value,
+        document.getElementById('login-email').value.trim(),
         document.getElementById('login-password').value
-    ).catch(err => alert(err.message));
+    ).catch(err => {
+        const txt = friendlyAuthError(err);
+        msgEl.style.display = 'block';
+        msgEl.style.background = '#ffebee';
+        msgEl.style.color = '#dc2626';
+        msgEl.textContent = '❌ ' + txt;
+        btn.disabled = false;
+        btn.textContent = 'Login';
+    });
 };
 
 document.getElementById('logout-btn').onclick = () => auth.signOut();
@@ -2254,10 +2843,22 @@ window.openProfileEdit = () => {
 
     const deptSel = document.getElementById('profile-dept');
     if (deptSel) deptSel.value = userProfile.department || '';
-    populateDeptTeams('profile-team', '', userProfile.team || '');
+    populateDeptTeams('profile-team', userProfile.department || '', userProfile.team || '');
     populateInstrumentOptions(userProfile.level || 'Level-1');
     const instrSel = document.getElementById('profile-instrument');
     if (instrSel) instrSel.value = userProfile.instrument || '';
+
+    // Populate profile picture preview
+    window._profilePicDataUrl = null;
+    const ppPreview = document.getElementById('profile-pic-preview');
+    const ppInit    = document.getElementById('profile-pic-init');
+    if (userProfile.photoURL) {
+        if (ppPreview) { ppPreview.src = userProfile.photoURL; ppPreview.style.display = ''; }
+        if (ppInit) ppInit.style.display = 'none';
+    } else {
+        if (ppPreview) ppPreview.style.display = 'none';
+        if (ppInit) { ppInit.textContent = (userProfile.name||'?')[0].toUpperCase(); ppInit.style.display = ''; }
+    }
 
     const cancelBtn = document.getElementById('cancel-edit');
     if (cancelBtn) cancelBtn.classList.remove('hidden');
@@ -2269,17 +2870,54 @@ window.openProfileEdit = () => {
 // ═══════════════════════════════════════════════════════════
 window.openForgotPassword = (e) => {
     e.preventDefault();
-    const email = prompt('Enter your email address to reset password:');
-    if (!email) return;
-    if (!email.includes('@')) { alert('❌ Please enter a valid email address!'); return; }
-    if (confirm(`Send password reset email to: ${email}?`)) {
-        auth.sendPasswordResetEmail(email)
-            .then(() => alert(`✅ Password reset email sent to ${email}!\n\nCheck your inbox and spam folder.`))
-            .catch(error => {
-                if (error.code==='auth/user-not-found') alert('❌ No account found with this email address!');
-                else if (error.code==='auth/invalid-email') alert('❌ Invalid email format!');
-                else alert('❌ Error: ' + error.message);
-            });
+    const panel = document.getElementById('forgot-panel');
+    const emailInput = document.getElementById('forgot-email');
+    const msgEl = document.getElementById('forgot-msg');
+    if (panel) {
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        if (panel.style.display === 'block') {
+            emailInput.value = document.getElementById('login-email').value || '';
+            msgEl.style.display = 'none';
+            emailInput.focus();
+        }
+    }
+};
+
+window.closeForgotPanel = () => {
+    const panel = document.getElementById('forgot-panel');
+    if (panel) panel.style.display = 'none';
+};
+
+window.sendForgotEmail = async () => {
+    const emailInput = document.getElementById('forgot-email');
+    const btn = document.getElementById('forgot-send-btn');
+    const msgEl = document.getElementById('forgot-msg');
+    const email = emailInput.value.trim();
+    if (!email) {
+        msgEl.style.display = 'block';
+        msgEl.style.background = '#ffebee'; msgEl.style.color = '#dc2626';
+        msgEl.textContent = '❌ Please enter your email address.';
+        return;
+    }
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+    msgEl.style.display = 'none';
+    try {
+        await auth.sendPasswordResetEmail(email);
+        msgEl.style.display = 'block';
+        msgEl.style.background = '#e8f5e9'; msgEl.style.color = '#059669';
+        msgEl.innerHTML = `✅ Reset link sent to <b>${email}</b>!<br><small style="font-weight:400;">Check your inbox and spam folder.</small>`;
+        btn.textContent = 'Sent ✓';
+        setTimeout(() => {
+            document.getElementById('forgot-panel').style.display = 'none';
+            btn.disabled = false; btn.textContent = 'Send Reset Link';
+        }, 3500);
+    } catch (error) {
+        msgEl.style.display = 'block';
+        msgEl.style.background = '#ffebee'; msgEl.style.color = '#dc2626';
+        msgEl.textContent = '❌ ' + friendlyAuthError(error);
+        btn.disabled = false;
+        btn.textContent = 'Send Reset Link';
     }
 };
 
@@ -2296,6 +2934,42 @@ if ('serviceWorker' in navigator) {
             })
             .catch(err => console.log('SW registration failed:', err));
     });
+}
+
+// ── PWA Install Prompt ──
+let _deferredInstallPrompt = null;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    _deferredInstallPrompt = e;
+    const banner = document.getElementById('install-banner');
+    if (banner && !localStorage.getItem('install-banner-dismissed')) {
+        banner.classList.remove('hidden');
+        banner.style.display = 'flex';
+    }
+});
+
+window.installApp = async () => {
+    if (!_deferredInstallPrompt) return;
+    _deferredInstallPrompt.prompt();
+    const { outcome } = await _deferredInstallPrompt.userChoice;
+    if (outcome === 'accepted') {
+        const banner = document.getElementById('install-banner');
+        if (banner) { banner.classList.add('hidden'); banner.style.display = 'none'; }
+    }
+    _deferredInstallPrompt = null;
+};
+
+window.dismissInstallBanner = () => {
+    const banner = document.getElementById('install-banner');
+    if (banner) { banner.classList.add('hidden'); banner.style.display = 'none'; }
+    localStorage.setItem('install-banner-dismissed', '1');
+};
+
+// Auto-hide if already installed (standalone mode)
+if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
+    const banner = document.getElementById('install-banner');
+    if (banner) { banner.classList.add('hidden'); banner.style.display = 'none'; }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -2471,7 +3145,7 @@ window._sendRoleNotification = async (userId, userName, newRole, category) => {
 window._initNotifications = () => {
     loadUserNotifications();
     checkSadhanaReminder();
-    if (adminBtn && isAnyAdmin()) adminBtn.classList.remove('hidden');
+    // (adminBtn removed — bottom nav handles admin visibility)
 };
 
 // USER SIDEBAR
@@ -2484,6 +3158,7 @@ window.openUserSidebar = () => {
         const r = document.getElementById('sidebar-user-role');
         if (n) n.textContent = userProfile.name || '';
         if (r) r.textContent = userProfile.role === 'superAdmin' ? '👑 Super Admin'
+            : userProfile.role === 'deptAdmin' ? `🛡️ Dept Admin — ${userProfile.department||''}`
             : userProfile.role === 'teamLeader' ? `👥 Team Leader — ${userProfile.team||''}`
             : `${userProfile.level||'Level-1'} | ${userProfile.department||''} | ${userProfile.team||''}`;
     }
@@ -2515,4 +3190,1722 @@ window.openNotificationsPanel = async () => {
         const badge = document.getElementById('sidebar-notif-badge');
         if (badge) badge.classList.add('hidden');
     } catch(e) { console.warn(e); }
+};
+
+// ═══════════════════════════════════════════════════════════
+// PROFILE PICTURE
+// ═══════════════════════════════════════════════════════════
+window._profilePicDataUrl = null;
+
+window.handleProfilePicSelect = (input) => {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const MAX = 200;
+            let w = img.width, h = img.height;
+            if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+            else       { w = Math.round(w * MAX / h); h = MAX; }
+            canvas.width = w; canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+            window._profilePicDataUrl = dataUrl;
+            const preview = document.getElementById('profile-pic-preview');
+            const init    = document.getElementById('profile-pic-init');
+            if (preview) { preview.src = dataUrl; preview.style.display = ''; }
+            if (init) init.style.display = 'none';
+        };
+        img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+};
+
+function updateAvatarDisplay(photoURL, name) {
+    const initial = (name || '?').split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase();
+    const pairs = [
+        ['header-av-img', 'header-av-init'],
+        ['sidebar-av-img', 'sidebar-av-init'],
+    ];
+    pairs.forEach(([imgId, initId]) => {
+        const img  = document.getElementById(imgId);
+        const init = document.getElementById(initId);
+        if (!img || !init) return;
+        if (photoURL) {
+            img.src = photoURL; img.style.display = '';
+            init.style.display = 'none';
+        } else {
+            img.style.display  = 'none';
+            init.textContent   = initial;
+            init.style.display = '';
+        }
+    });
+}
+
+function avatarHtml(photoURL, name, size) {
+    const sz = size || 32;
+    const initial = (name || '?').split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase();
+    if (photoURL) {
+        return `<div class="av" style="width:${sz}px;height:${sz}px;"><img src="${photoURL}"></div>`;
+    }
+    return `<div class="av" style="width:${sz}px;height:${sz}px;"><span class="av-init" style="font-size:${Math.round(sz*0.38)}px;">${initial}</span></div>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// USER ACTION BOTTOM SHEET (UAC)
+// ═══════════════════════════════════════════════════════════
+let _uacUID = null, _uacName = null;
+
+window.openUAC = (uid, name, level, chanting, rounds, role, dept, team) => {
+    _uacUID  = uid;
+    _uacName = name;
+    document.getElementById('uac-name').textContent = name;
+    document.getElementById('uac-sub').textContent  = `${level||''} · ${dept||''} · ${team||''} · ${chanting||''} · ${rounds||'?'} rounds`;
+
+    // Level change: superAdmin or deptAdmin in same dept
+    const levelWrap = document.getElementById('uac-level-wrap');
+    const levelSel  = document.getElementById('uac-level-sel');
+    if (levelWrap && levelSel) {
+        if (isSuperAdmin() || (isDeptAdmin() && dept === userProfile.department)) {
+            levelSel.value = level || '';
+            levelWrap.style.display = '';
+        } else {
+            levelWrap.style.display = 'none';
+        }
+    }
+
+    // Role change: admin-only
+    const roleWrap = document.getElementById('uac-role-wrap');
+    if (isSuperAdmin() || (isDeptAdmin() && dept === userProfile.department)) {
+        let opts = '<option value="" disabled selected>Change Role…</option>';
+        if (isSuperAdmin()) {
+            if (role !== 'superAdmin') opts += '<option value="superAdmin">👑 Make Super Admin</option>';
+            ['IGF','IYF','ICF_MTG','ICF_PRJI'].forEach(d => {
+                opts += `<option value="deptAdmin:${d}">🛡️ Dept Admin — ${d}</option>`;
+                if (DEPT_TEAMS[d]) DEPT_TEAMS[d].filter(t=>t!=='Other').forEach(t =>
+                    opts += `<option value="teamLeader:${d}:${t}">👥 TL — ${t} (${d})</option>`
+                );
+            });
+            if (role !== 'user') opts += '<option value="demote">🚫 Revoke to User</option>';
+        } else if (isDeptAdmin()) {
+            if (DEPT_TEAMS[userProfile.department]) DEPT_TEAMS[userProfile.department].filter(t=>t!=='Other').forEach(t =>
+                opts += `<option value="teamLeader:${userProfile.department}:${t}">👥 TL — ${t}</option>`
+            );
+            if (role !== 'user') opts += '<option value="demote">🚫 Revoke to User</option>';
+        }
+        document.getElementById('uac-role-sel').innerHTML = opts;
+        roleWrap.style.display = '';
+    } else {
+        roleWrap.style.display = 'none';
+    }
+
+    // Remove button: superAdmin only
+    const removeBtn = document.getElementById('uac-remove-btn');
+    if (removeBtn) removeBtn.style.display = isSuperAdmin() ? '' : 'none';
+
+    // Activity Analysis: admins only
+    const actWrap = document.getElementById('uac-activity-wrap');
+    if (actWrap) actWrap.style.display = isAnyAdmin() ? '' : 'none';
+
+    document.getElementById('uac-sheet').classList.add('open');
+    document.getElementById('uac-overlay').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+};
+
+window.closeUAC = () => {
+    document.getElementById('uac-sheet').classList.remove('open');
+    document.getElementById('uac-overlay').classList.add('hidden');
+    document.body.style.overflow = '';
+};
+
+window.uacHistory  = () => { closeUAC(); openUserModal(_uacUID, _uacName); };
+window.uacExcel    = () => { closeUAC(); downloadUserExcel(_uacUID, _uacName); };
+window.uacProgress = () => { closeUAC(); openProgressModal(_uacUID, _uacName); };
+
+window.openWCRUser = (idx) => {
+    const u = (window._wcrUserList || [])[idx];
+    if (!u) return;
+    openUAC(u.uid, u.name, u.level, u.chanting, u.rounds, u.role, u.dept, u.team);
+};
+
+window.openAdminCmpUser = (idx) => {
+    const u = (window._adminCmpUserList || [])[idx];
+    if (!u) return;
+    openUAC(u.uid, u.name, u.level, u.chanting, u.rounds, u.role, u.dept, u.team);
+};
+
+window.uacRoleChange = async (sel) => {
+    const val = sel.value; if (!val) return;
+    const parts = val.split(':');
+    try {
+        if (val === 'superAdmin') {
+            if (!confirm(`Make ${_uacName} a Super Admin?`)) { sel.value=''; return; }
+            await db.collection('users').doc(_uacUID).update({ role: 'superAdmin' });
+        } else if (val === 'demote') {
+            if (!confirm(`Revoke admin role for ${_uacName}?`)) { sel.value=''; return; }
+            await db.collection('users').doc(_uacUID).update({ role: 'user' });
+        } else if (parts[0] === 'deptAdmin') {
+            if (!confirm(`Make ${_uacName} Dept Admin of ${parts[1]}?`)) { sel.value=''; return; }
+            await db.collection('users').doc(_uacUID).update({ role: 'deptAdmin', department: parts[1] });
+        } else if (parts[0] === 'teamLeader') {
+            if (!confirm(`Make ${_uacName} Team Leader of ${parts[2]} (${parts[1]})?`)) { sel.value=''; return; }
+            await db.collection('users').doc(_uacUID).update({ role: 'teamLeader', department: parts[1], team: parts[2] });
+        }
+        showToast('✅ Role updated!', 'success');
+        sel.value = '';
+        closeUAC();
+        adminPanelLoaded = false;
+        _userWCRLoaded = false;
+    } catch(e) {
+        alert('Error: ' + e.message);
+    }
+};
+
+window.uacLevelChange = async (sel) => {
+    const newLevel = sel.value; if (!newLevel) return;
+    if (!confirm(`Change ${_uacName}'s level to ${newLevel}?`)) { sel.value = ''; return; }
+    try {
+        await db.collection('users').doc(_uacUID).update({ level: newLevel });
+        showToast(`✅ Level changed to ${newLevel}!`, 'success');
+        closeUAC();
+        adminPanelLoaded = false;
+        _userWCRLoaded = false;
+    } catch(e) {
+        alert('Error: ' + e.message);
+    }
+};
+
+window.uacRemove = async () => {
+    if (!isSuperAdmin()) return;
+    const typed = prompt(`Type "${_uacName}" to confirm deletion:`);
+    if (typed !== _uacName) { alert('Name did not match. Cancelled.'); return; }
+    try {
+        await db.collection('users').doc(_uacUID).delete();
+        showToast('✅ User removed.', 'success');
+        closeUAC();
+        adminPanelLoaded = false;
+        _userWCRLoaded = false;
+    } catch(e) { alert('Error: ' + e.message); }
+};
+
+// ═══════════════════════════════════════════════════════════
+// ACTIVITY ANALYSIS
+// ═══════════════════════════════════════════════════════════
+let _aaUID = null, _aaName = null, _aaTab = 'current-week';
+let _aaChartDonut = null, _aaChartBar = null;
+
+window.uacActivity = () => {
+    const uid = _uacUID, name = _uacName;
+    closeUAC();
+    openActivityAnalysis(uid, name);
+};
+
+window.openActivityAnalysis = (uid, name) => {
+    _aaUID = uid; _aaName = name; _aaTab = 'current-week';
+    document.getElementById('aa-user-name').textContent = name;
+    document.getElementById('aa-modal').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+    document.querySelectorAll('.aa-tab-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
+    renderActivityAnalysis(uid, 'current-week');
+};
+
+window.closeActivityModal = () => {
+    document.getElementById('aa-modal').classList.add('hidden');
+    document.body.style.overflow = '';
+    if (_aaChartDonut) { try { _aaChartDonut.destroy(); } catch(e){} _aaChartDonut = null; }
+    if (_aaChartBar)   { try { _aaChartBar.destroy();   } catch(e){} _aaChartBar   = null; }
+};
+
+window.setAATab = (tab, btn) => {
+    _aaTab = tab;
+    document.querySelectorAll('.aa-tab-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    renderActivityAnalysis(_aaUID, tab);
+};
+
+function getActivityConfig(level) {
+    const isL4  = level === 'Level-4';
+    const isL3  = level === 'Level-3';
+    const isL12 = level === 'Level-1' || level === 'Level-2';
+
+    const actKeys = ['sleep','wakeup','chanting','reading','hearing'];
+    if (isL3 || isL4) actKeys.push('instrument');
+    if (isL4) actKeys.push('notes');
+    actKeys.push('daySleep');
+
+    const actLabels = {
+        sleep:'Sleep', wakeup:'Wake-up', chanting:'Chanting',
+        reading:'Reading', hearing:'Hearing', instrument:'Instrument',
+        notes:'Notes', daySleep:'Day Sleep'
+    };
+
+    const actMax = {
+        sleep:25, wakeup:25, chanting:25, daySleep:10,
+        reading:  isL12 ? 20 : 25,
+        hearing:  isL12 ? 20 : 25,
+        instrument: (isL3 || isL4) ? 5 : 0,
+        notes: isL4 ? 20 : 0
+    };
+
+    return { actKeys, actLabels, actMax, dailyMax: getDailyMax(level) };
+}
+
+async function renderActivityAnalysis(uid, period) {
+    const statusEl  = document.getElementById('aa-status');
+    const donutWrap = document.getElementById('aa-donut-wrap');
+    const barWrap   = document.getElementById('aa-bar-wrap');
+    statusEl.textContent = 'Loading…';
+    if (donutWrap) donutWrap.style.opacity = '0.3';
+    if (barWrap)   barWrap.style.opacity   = '0.3';
+
+    if (_aaChartDonut) { try { _aaChartDonut.destroy(); } catch(e){} _aaChartDonut = null; }
+    if (_aaChartBar)   { try { _aaChartBar.destroy();   } catch(e){} _aaChartBar   = null; }
+
+    try {
+        const weekOffset = period === 'prev-week' ? 1 : 0;
+        const { dates, weekStart, weekEnd } = getWeekDates(weekOffset);
+        const startStr = dates[0], endStr = dates[dates.length - 1];
+
+        const [saSnap, userSnap] = await Promise.all([
+            db.collection('users').doc(uid).collection('sadhana')
+                .where(firebase.firestore.FieldPath.documentId(), '>=', startStr)
+                .where(firebase.firestore.FieldPath.documentId(), '<=', endStr)
+                .get(),
+            db.collection('users').doc(uid).get()
+        ]);
+
+        const level = userSnap.data()?.level || 'Level-1';
+        const { actKeys, actLabels, actMax, dailyMax } = getActivityConfig(level);
+
+        const validDocs = saSnap.docs.filter(d => {
+            const data = d.data();
+            return data.sleepTime && data.sleepTime !== 'NR';
+        });
+
+        if (validDocs.length === 0) {
+            statusEl.textContent = 'No entries found for this period.';
+            if (donutWrap) donutWrap.style.opacity = '1';
+            if (barWrap)   barWrap.style.opacity   = '1';
+            return;
+        }
+        statusEl.textContent = '';
+
+        const totals = {};
+        actKeys.forEach(k => totals[k] = 0);
+        validDocs.forEach(d => {
+            const scores = d.data().scores || {};
+            actKeys.forEach(k => { totals[k] += (scores[k] ?? 0); });
+        });
+
+        const n = validDocs.length;
+        const totalSvcMins = validDocs.reduce((s, d) => s + (d.data().serviceMinutes||0), 0);
+        const totalScore = validDocs.reduce((sum, d) => sum + (d.data().totalScore ?? 0) + (d.data().bonusTotal ?? 0), 0) + calcServiceWeekly(totalSvcMins, level);
+        const weekPct = Math.round(totalScore * 100 / (n * dailyMax));
+        const weekScores = {};
+        actKeys.forEach(k => { weekScores[k] = Math.round(totals[k] * 10) / 10; });
+
+        const fmtD = d => d.toLocaleDateString('en-IN', { day:'numeric', month:'short' });
+        document.getElementById('aa-period-label').textContent =
+            `${fmtD(weekStart)} – ${fmtD(weekEnd)} · ${n} day${n>1?'s':''} · ${totalScore} pts`;
+
+        if (donutWrap) donutWrap.style.opacity = '1';
+        if (barWrap)   barWrap.style.opacity   = '1';
+
+        // Donut chart
+        const donutColor = weekPct >= 70 ? '#16a34a' : weekPct >= 50 ? '#d97706' : '#dc2626';
+        const donutCanvas = document.getElementById('aa-donut-canvas');
+        _aaChartDonut = new Chart(donutCanvas.getContext('2d'), {
+            type: 'doughnut',
+            data: { datasets: [{ data: [weekPct, Math.max(0, 100 - weekPct)], backgroundColor: [donutColor, '#e5e7eb'], borderWidth: 0 }] },
+            options: { cutout: '74%', responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false }, tooltip: { enabled: false } }, animation: { duration: 500 } },
+            plugins: [{
+                id: 'centerText',
+                afterDraw(chart) {
+                    const { ctx, chartArea: { left, top, width, height } } = chart;
+                    const cx = left + width / 2, cy = top + height / 2;
+                    ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                    ctx.font = `bold ${Math.round(width * 0.2)}px Segoe UI`;
+                    ctx.fillStyle = donutColor;
+                    ctx.fillText(weekPct + '%', cx, cy - 7);
+                    ctx.font = `${Math.round(width * 0.1)}px Segoe UI`;
+                    ctx.fillStyle = '#6b7280';
+                    ctx.fillText('week score', cx, cy + 12);
+                    ctx.restore();
+                }
+            }]
+        });
+
+        // Horizontal bar chart
+        const barColors = actKeys.map(k => {
+            const maxK = actMax[k] * n;
+            const pct = maxK > 0 ? (weekScores[k] / maxK) * 100 : 0;
+            return pct >= 75 ? '#16a34a' : pct >= 50 ? '#f59e0b' : '#ef4444';
+        });
+
+        const barCanvas = document.getElementById('aa-bar-canvas');
+        _aaChartBar = new Chart(barCanvas.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: actKeys.map(k => actLabels[k]),
+                datasets: [{ data: actKeys.map(k => weekScores[k]), backgroundColor: barColors, borderRadius: 4, barThickness: 14 }]
+            },
+            options: {
+                indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: ctx => {
+                                const k = actKeys[ctx.dataIndex];
+                                const maxK = actMax[k] * n;
+                                const pctStr = maxK > 0 ? ` (${Math.round(weekScores[k]*100/maxK)}%)` : '';
+                                return ` ${weekScores[k]} / ${maxK} pts${pctStr}`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: { min: Math.floor(-5 * n), max: Math.ceil(25 * n), grid: { color: '#f3f4f6' }, ticks: { font: { size: 10 } } },
+                    y: { ticks: { font: { size: 11 } } }
+                }
+            }
+        });
+
+    } catch (e) {
+        statusEl.textContent = 'Error loading data.';
+        console.error('Activity Analysis error:', e);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════
+// BOTTOM NAVIGATION
+// ═══════════════════════════════════════════════════════════
+function initBottomNav() {
+    const userNav  = document.getElementById('user-bottom-nav');
+    const adminNav = document.getElementById('admin-bottom-nav');
+    if (isAnyAdmin()) {
+        if (adminNav) adminNav.classList.add('visible');
+        if (userNav)  userNav.classList.remove('visible');
+    } else {
+        if (userNav)  userNav.classList.add('visible');
+        if (adminNav) adminNav.classList.remove('visible');
+    }
+    document.body.classList.add('has-bottom-nav');
+}
+
+window.bnavSwitch = (tab, btn) => {
+    document.querySelectorAll('#user-bottom-nav .bnav-item').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    switchTab(tab);
+};
+
+window.bnavAdminSwitch = (tab, btn) => {
+    document.querySelectorAll('#admin-bottom-nav .bnav-item').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    switchTab(tab);
+};
+
+// ═══════════════════════════════════════════════════════════
+// HOME PANEL
+// ═══════════════════════════════════════════════════════════
+function drawRing(canvas, pct, color) {
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width, h = canvas.height, cx = w/2, cy = h/2, r = Math.min(w,h)/2 - 8;
+    ctx.clearRect(0,0,w,h);
+    ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.strokeStyle='#e2e8f0'; ctx.lineWidth=10; ctx.stroke();
+    if (pct > 0) {
+        ctx.beginPath(); ctx.arc(cx,cy,r,-Math.PI/2,-Math.PI/2+(Math.min(pct,100)/100)*Math.PI*2);
+        ctx.strokeStyle=color; ctx.lineWidth=10; ctx.lineCap='round'; ctx.stroke();
+    }
+}
+
+function animateRing(canvas, targetPct, color) {
+    const start = performance.now();
+    const duration = 900;
+    function frame(now) {
+        const p = Math.min((now - start) / duration, 1);
+        const eased = 1 - Math.pow(1 - p, 3);
+        drawRing(canvas, targetPct * eased, color);
+        if (p < 1) requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+}
+
+async function loadHomePanel(weekOffset) {
+    const level = userProfile?.level || 'Level-1';
+    const dailyMax = getDailyMax(level);
+    const { actKeys, actLabels, actMax } = getActivityConfig(level);
+    const { dates, weekStart, weekEnd } = getWeekDates(weekOffset);
+    const todayStr = localDateStr(0);
+
+    // Fetch sadhana entries for this week
+    const startStr = dates[0], endStr = dates[dates.length-1];
+    let saSnap;
+    try {
+        saSnap = await db.collection('users').doc(currentUser.uid).collection('sadhana')
+            .where(firebase.firestore.FieldPath.documentId(), '>=', startStr)
+            .where(firebase.firestore.FieldPath.documentId(), '<=', endStr).get();
+    } catch(e) { console.warn('Home panel error:', e); return; }
+
+    const filledSet = new Set();
+    const entryMap = new Map();
+    saSnap.docs.forEach(d => {
+        const data = d.data();
+        if (data.sleepTime && data.sleepTime !== 'NR') {
+            filledSet.add(d.id);
+            entryMap.set(d.id, data);
+        }
+    });
+
+    // Count ALL eligible days — apply NR penalty for missed ones
+    const joinedDate = userProfile?.joinedDate || APP_START;
+    let totalScore = 0, totalDays = 0, filledDays = 0, svcMinsWeek = 0;
+    const actTotals = {};
+    actKeys.forEach(k => actTotals[k] = 0);
+
+    dates.forEach(ds => {
+        if (ds < APP_START || ds < joinedDate || ds > todayStr) return;
+        if (ds === todayStr && !filledSet.has(ds)) return; // today not filled yet — skip, don't penalize
+        totalDays++;
+        if (filledSet.has(ds)) {
+            const data = entryMap.get(ds);
+            totalScore += (data.totalScore || 0) + (data.bonusTotal || 0);
+            svcMinsWeek += data.serviceMinutes || 0;
+            filledDays++;
+            const sc = data.scores || {};
+            actKeys.forEach(k => { actTotals[k] += (sc[k] ?? 0); });
+        } else {
+            totalScore += -30; // NR penalty
+        }
+    });
+    totalScore += calcServiceWeekly(svcMinsWeek, level);
+
+    const weekPct = totalDays > 0 ? Math.round(totalScore * 100 / (totalDays * dailyMax + 25)) : 0;
+
+    // Ring chart with animation
+    const ringColor = weekPct >= 70 ? '#16a34a' : weekPct >= 50 ? '#d97706' : '#dc2626';
+    const canvas = document.getElementById('home-ring-canvas');
+    if (canvas) animateRing(canvas, weekPct, ringColor);
+    const pctEl = document.getElementById('home-ring-pct');
+    if (pctEl) pctEl.innerHTML = `<span style="font-size:24px;font-weight:800;color:${ringColor};">${weekPct}%</span><span style="font-size:10px;color:#6b7280;">week score</span>`;
+
+    // Stats
+    const ptsEl = document.getElementById('home-week-pts');
+    const daysEl = document.getElementById('home-days-count');
+    if (ptsEl) ptsEl.textContent = totalScore;
+    if (daysEl) daysEl.textContent = filledDays + '/' + totalDays;
+
+    // Streak
+    let streak = 0;
+    const checkDates = [...dates].reverse();
+    for (const ds of checkDates) {
+        if (ds > todayStr) continue;
+        if (filledSet.has(ds)) streak++; else break;
+    }
+    const streakEl = document.getElementById('home-streak-count');
+    if (streakEl) streakEl.textContent = streak;
+
+    // Streak dots with staggered animation
+    const dotsEl = document.getElementById('home-streak-dots');
+    if (dotsEl) {
+        const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+        dotsEl.innerHTML = dates.map((ds, i) => {
+            const [_dy,_dm,_dd] = ds.split('-').map(Number); const dow = new Date(_dy,_dm-1,_dd).getDay();
+            const cls = filledSet.has(ds) ? 'filled' : (ds < todayStr ? 'missed' : (ds === todayStr ? 'today' : ''));
+            return `<div class="streak-day-wrap" style="animation-delay:${i*50}ms;">
+                <div class="streak-dot ${cls}"></div>
+                <span class="streak-dot-label">${dayNames[dow]}</span>
+            </div>`;
+        }).join('');
+    }
+
+    // Fill alert
+    const alertEl = document.getElementById('home-fill-alert');
+    if (alertEl) {
+        if (weekOffset === 0 && !filledSet.has(todayStr)) alertEl.classList.remove('hidden');
+        else alertEl.classList.add('hidden');
+    }
+
+    // Activity bars
+    const barsEl = document.getElementById('home-activity-bars');
+    if (barsEl && filledDays > 0) {
+        barsEl.innerHTML = actKeys.filter(k => actMax[k] > 0).map(k => {
+            const maxK = actMax[k] * filledDays;
+            const pct = maxK > 0 ? Math.round(actTotals[k] * 100 / maxK) : 0;
+            const color = pct >= 75 ? '#16a34a' : pct >= 50 ? '#f59e0b' : '#ef4444';
+            return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                <span style="font-size:11px;width:60px;color:#6b7280;text-align:right;">${actLabels[k]}</span>
+                <div class="home-act-bar"><div class="home-act-fill" style="width:${pct}%;background:${color};"></div></div>
+                <span style="font-size:11px;font-weight:600;color:${color};width:32px;">${pct}%</span>
+            </div>`;
+        }).join('');
+    } else if (barsEl) {
+        barsEl.innerHTML = '<p style="color:#aaa;text-align:center;font-size:12px;">No data for this period</p>';
+    }
+}
+
+// ═══════════════════════════════════════════════════════════
+// LEADERBOARD
+// ═══════════════════════════════════════════════════════════
+let _lbLoading = false, _lbMode = 'weekly';
+
+window.setLBMode = (mode, btn) => {
+    _lbMode = mode;
+    document.querySelectorAll('#lb-mode-tabs .chart-tab-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    loadLeaderboard(true);
+};
+
+async function loadLeaderboard(force) {
+    if (_lbLoading && !force) return;
+    _lbLoading = true;
+    const container = document.getElementById('leaderboard-container');
+    const podiumEl  = document.getElementById('lb-podium');
+    if (!container) { _lbLoading = false; return; }
+    container.innerHTML = '<p style="color:#aaa;text-align:center;padding:20px;">Loading…</p>';
+
+    try {
+        const usersSnap = await db.collection('users').get();
+        const filtered = usersSnap.docs.filter(doc => {
+            const d = doc.data();
+            // Exclude all admins — only regular users in leaderboard
+            if (d.role === 'superAdmin' || d.role === 'deptAdmin' || d.role === 'overallTeamLeader' || d.role === 'teamLeader' || d.role === 'admin') return false;
+            return matchesViewScope(d) && d.name;
+        });
+
+        const rows = [];
+        const MEDALS = ['🥇','🥈','🥉'];
+
+        if (_lbMode === 'daily') {
+            const targetDate = localDateStr(1);
+            const daySnaps = await Promise.all(filtered.map(uDoc => uDoc.ref.collection('sadhana').doc(targetDate).get()));
+            filtered.forEach((uDoc, i) => {
+                const u = uDoc.data(), snap = daySnaps[i];
+                const joinedDate = u.joinedDate || APP_START;
+                if (targetDate < joinedDate) return; // not yet joined
+                const dailyMax = getDailyMax(u.level || 'Level-1');
+                if (snap.exists && snap.data().sleepTime && snap.data().sleepTime !== 'NR') {
+                    const d = snap.data();
+                    const score = (d.totalScore??0) + (d.bonusTotal||0);
+                    rows.push({ uid: uDoc.id, name: u.name||'—', photo: u.photoURL||null, level: u.level||'L1', score, pct: Math.round(score*100/dailyMax), rejected: !!d.rejected });
+                } else {
+                    // NR — penalize
+                    rows.push({ uid: uDoc.id, name: u.name||'—', photo: u.photoURL||null, level: u.level||'L1', score: -30, pct: Math.round(-30*100/dailyMax), rejected: false, isNR: true });
+                }
+            });
+        } else {
+            const weekOffset = _lbMode === 'lastweek' ? 1 : 0;
+            const { dates } = getWeekDates(weekOffset);
+            const startStr = dates[0], endStr = dates[dates.length-1];
+            const weekSnaps = await Promise.all(filtered.map(uDoc =>
+                uDoc.ref.collection('sadhana')
+                    .where(firebase.firestore.FieldPath.documentId(), '>=', startStr)
+                    .where(firebase.firestore.FieldPath.documentId(), '<=', endStr).get()
+            ));
+            const todayStr = localDateStr(0);
+            filtered.forEach((uDoc, i) => {
+                const u = uDoc.data();
+                const dailyMax = getDailyMax(u.level || 'Level-1');
+                const joinedDate = u.joinedDate || APP_START;
+                const entryMap = new Map();
+                weekSnaps[i].docs.forEach(d => entryMap.set(d.id, d.data()));
+
+                // Count all eligible days and apply NR penalty for missed/NR ones
+                let totalScore = 0, totalDays = 0, filledDays = 0, svcMinsWeek = 0;
+                dates.forEach(ds => {
+                    if (ds < APP_START || ds < joinedDate) return;
+                    if (ds > todayStr) return;
+                    if (ds === todayStr) {
+                        const entry = entryMap.get(ds);
+                        // Today: skip if no entry at all (not yet submitted). If NR, penalize.
+                        if (!entry || !entry.sleepTime) return;
+                    }
+                    totalDays++;
+                    const entry = entryMap.get(ds);
+                    if (entry && entry.sleepTime && entry.sleepTime !== 'NR') {
+                        totalScore += (entry.totalScore ?? 0) + (entry.bonusTotal || 0);
+                        svcMinsWeek += entry.serviceMinutes || 0;
+                        filledDays++;
+                    } else {
+                        totalScore += -30; // NR penalty (including explicit today NR)
+                    }
+                });
+                totalScore += calcServiceWeekly(svcMinsWeek, u.level || 'Level-1');
+                if (totalDays === 0) return;
+                const pct = Math.round(totalScore * 100 / (totalDays * dailyMax + 25));
+                rows.push({
+                    uid: uDoc.id, name: u.name||'—', photo: u.photoURL||null,
+                    level: u.level||'L1', score: totalScore, pct,
+                    days: filledDays + '/' + dates.length, rejected: false
+                });
+            });
+        }
+
+        rows.sort((a,b) => b.score - a.score);
+
+        // Podium with dramatic stagger (3rd → 2nd → 1st)
+        if (podiumEl && rows.length >= 2) {
+            const top = rows.slice(0, Math.min(3, rows.length));
+            // Visual order: 2nd | 1st (center) | 3rd
+            const order = top.length === 2 ? [top[1], top[0]] : [top[1], top[0], top[2]];
+            const delays = top.length === 2 ? [0.4, 1.2] : [1.0, 1.6, 0.4];
+            const sizes = [74, 96, 62]; // rank2, rank1, rank3
+            const borders = ['#94a3b8', '#fbbf24', '#cd7f32'];
+            const topMargins = ['28px', '0px', '48px']; // stepped heights: 2nd slightly lower, 3rd lowest
+            podiumEl.innerHTML = order.map((r, i) => {
+                const rank = top.indexOf(r);
+                const medal = MEDALS[rank];
+                const sz = sizes[i] || 54;
+                const borderColor = borders[i] || '#e5e7eb';
+                const confetti = rank === 0 ? `<span style="position:absolute;top:-10px;font-size:24px;animation:confettiBurst 1.2s ease ${delays[i]+0.4}s both;">🎉</span>` : '';
+                return `<div style="display:flex;flex-direction:column;align-items:center;gap:5px;min-width:86px;position:relative;margin-top:${topMargins[i]};animation:podiumRise 0.6s cubic-bezier(0.34,1.56,0.64,1) ${delays[i]}s both;">
+                    ${confetti}
+                    <div class="av" style="width:${sz}px;height:${sz}px;border:3px solid ${borderColor};">${r.photo ? `<img src="${r.photo}">` : `<span class="av-init" style="font-size:${Math.round(sz*0.38)}px;">${(r.name||'?').split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase()}</span>`}</div>
+                    <span style="font-size:22px;">${medal}</span>
+                    <span style="font-size:12px;font-weight:700;color:#1A3C5E;text-align:center;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.name}</span>
+                    <span style="font-size:13px;font-weight:800;color:${r.pct>=70?'#16a34a':'#d97706'};">${r.score} pts</span>
+                </div>`;
+            }).join('');
+        } else if (podiumEl) { podiumEl.innerHTML = ''; }
+
+        // List
+        container.innerHTML = rows.length === 0
+            ? '<p style="color:#aaa;text-align:center;padding:20px;">No entries for this period.</p>'
+            : rows.map((r, i) => {
+                const isSelf = r.uid === currentUser.uid;
+                const medal = i < 3 ? MEDALS[i] : `<span style="font-size:13px;font-weight:700;color:#9ca3af;">#${i+1}</span>`;
+                const scoreColor = r.pct >= 70 ? '#15803d' : r.pct >= 50 ? '#d97706' : '#dc2626';
+                const subLine = r.isNR ? 'NR' : r.rejected ? 'Rejected' : (r.days ? `${r.pct}% · ${r.days}d` : `${r.pct}%`);
+                return `<div class="lb-row${isSelf?' lb-self':''}" data-level="${r.level}" onclick="openWCRUser(${i})" style="cursor:pointer;animation-delay:${Math.min(i*0.03,0.18)}s;${r.isNR?'opacity:0.6;':''}">
+                    <div class="lb-rank">${medal}</div>
+                    ${avatarHtml(r.photo, r.name, 34)}
+                    <div class="lb-name">${r.name}<span style="font-size:10px;color:#9ca3af;margin-left:5px;">${r.level}</span></div>
+                    <div class="lb-score-wrap">
+                        <div class="lb-score" style="color:${scoreColor};">${r.rejected?'🚫':r.score}</div>
+                        <div class="lb-pct">${subLine}</div>
+                    </div>
+                </div>`;
+            }).join('');
+
+        // Cache user list for UAC clicks
+        window._wcrUserList = rows.map(r => ({
+            uid: r.uid, name: r.name, level: r.level,
+            chanting: '', rounds: '?', role: 'user',
+            dept: userProfile?.department || '', team: userProfile?.team || ''
+        }));
+
+    } catch(err) { console.error('Leaderboard error:', err); container.innerHTML = '<p style="color:#dc2626;text-align:center;">Error loading.</p>'; }
+    _lbLoading = false;
+}
+
+// ═══════════════════════════════════════════════════════════
+// ADMIN LEADERBOARD (scope-aware — SA sees all, deptAdmin sees dept, TL sees team)
+// ═══════════════════════════════════════════════════════════
+let _adminLbMode = 'weekly', _adminLbLoading = false;
+
+window.setAdminLBMode = (mode, btn) => {
+    _adminLbMode = mode;
+    document.querySelectorAll('#sa-lb-mode-tabs .chart-tab-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    // Reset filters on mode change
+    const fd = document.getElementById('sa-lb-filter-dept'); if (fd) fd.value = '';
+    const fl = document.getElementById('sa-lb-filter-level'); if (fl) fl.value = '';
+    const ft = document.getElementById('sa-lb-filter-team'); if (ft) ft.innerHTML = '<option value="">All Teams</option>';
+    loadAdminLeaderboard(true);
+};
+
+// Populate team dropdown based on selected dept filter
+window.updateSALBTeams = () => {
+    const dept = document.getElementById('sa-lb-filter-dept')?.value || '';
+    const teamSel = document.getElementById('sa-lb-filter-team');
+    if (!teamSel) return;
+    teamSel.innerHTML = '<option value="">All Teams</option>';
+    if (dept && DEPT_TEAMS[dept]) {
+        DEPT_TEAMS[dept].forEach(t => {
+            const o = document.createElement('option');
+            o.value = t; o.textContent = t;
+            teamSel.appendChild(o);
+        });
+    }
+};
+
+// Filter admin leaderboard rows by dept/level/team
+window.filterAdminLB = () => {
+    const dept  = document.getElementById('sa-lb-filter-dept')?.value || '';
+    const level = document.getElementById('sa-lb-filter-level')?.value || '';
+    const team  = document.getElementById('sa-lb-filter-team')?.value || '';
+    const rows = document.querySelectorAll('#sa-leaderboard-container .lb-row');
+    rows.forEach(row => {
+        const d = row.dataset.dept || '';
+        const l = row.dataset.level || '';
+        const t = row.dataset.team || '';
+        const show = (!dept || d === dept) && (!level || l === level) && (!team || t === team);
+        row.style.display = show ? '' : 'none';
+    });
+    // Hide podium when filtering (partial data makes podium misleading)
+    const podium = document.getElementById('sa-lb-podium');
+    if (podium) podium.style.display = (dept || level || team) ? 'none' : 'flex';
+};
+
+// Filter user leaderboard rows by level
+window.filterUserLB = () => {
+    const level = document.getElementById('lb-filter-level')?.value || '';
+    const rows = document.querySelectorAll('#leaderboard-container .lb-row');
+    rows.forEach(row => {
+        const l = row.dataset.level || '';
+        const show = !level || l === level;
+        row.style.display = show ? '' : 'none';
+    });
+    const podium = document.getElementById('lb-podium');
+    if (podium) podium.style.display = level ? 'none' : 'flex';
+};
+
+async function loadAdminLeaderboard(force) {
+    if (_adminLbLoading && !force) return;
+    _adminLbLoading = true;
+    const container = document.getElementById('sa-leaderboard-container');
+    const podiumEl  = document.getElementById('sa-lb-podium');
+    if (!container) { _adminLbLoading = false; return; }
+    container.innerHTML = '<p style="color:#aaa;text-align:center;padding:20px;">Loading…</p>';
+
+    try {
+        const usersSnap = await db.collection('users').get();
+        const filtered = usersSnap.docs.filter(doc => {
+            const d = doc.data();
+            if (d.role === 'superAdmin' || d.role === 'deptAdmin' || d.role === 'overallTeamLeader' || d.role === 'teamLeader' || d.role === 'admin') return false;
+            return matchesScope(d) && d.name;
+        });
+
+        const rows = [];
+        const MEDALS = ['🥇','🥈','🥉'];
+
+        if (_adminLbMode === 'daily') {
+            const targetDate = localDateStr(1);
+            const daySnaps = await Promise.all(filtered.map(uDoc => uDoc.ref.collection('sadhana').doc(targetDate).get()));
+            filtered.forEach((uDoc, i) => {
+                const u = uDoc.data(), snap = daySnaps[i];
+                const joinedDate = u.joinedDate || APP_START;
+                if (targetDate < joinedDate) return;
+                const dailyMax = getDailyMax(u.level || 'Level-1');
+                if (snap.exists && snap.data().sleepTime && snap.data().sleepTime !== 'NR') {
+                    const d = snap.data();
+                    const score = (d.totalScore??0) + (d.bonusTotal||0);
+                    rows.push({ uid: uDoc.id, name: u.name||'—', photo: u.photoURL||null, level: u.level||'L1', dept: u.department||'', team: u.team||'', score, pct: Math.round(score*100/dailyMax), rejected: !!d.rejected });
+                } else {
+                    rows.push({ uid: uDoc.id, name: u.name||'—', photo: u.photoURL||null, level: u.level||'L1', dept: u.department||'', team: u.team||'', score: -30, pct: Math.round(-30*100/dailyMax), rejected: false, isNR: true });
+                }
+            });
+        } else {
+            const weekOffset = _adminLbMode === 'lastweek' ? 1 : 0;
+            const { dates } = getWeekDates(weekOffset);
+            const startStr = dates[0], endStr = dates[dates.length-1];
+            const weekSnaps = await Promise.all(filtered.map(uDoc =>
+                uDoc.ref.collection('sadhana')
+                    .where(firebase.firestore.FieldPath.documentId(), '>=', startStr)
+                    .where(firebase.firestore.FieldPath.documentId(), '<=', endStr).get()
+            ));
+            const todayStr = localDateStr(0);
+            filtered.forEach((uDoc, i) => {
+                const u = uDoc.data();
+                const dailyMax = getDailyMax(u.level || 'Level-1');
+                const joinedDate = u.joinedDate || APP_START;
+                const entryMap = new Map();
+                weekSnaps[i].docs.forEach(d => entryMap.set(d.id, d.data()));
+
+                let totalScore = 0, totalDays = 0, filledDays = 0, svcMinsWeek = 0;
+                dates.forEach(ds => {
+                    if (ds < APP_START || ds < joinedDate || ds > todayStr) return;
+                    if (ds === todayStr) {
+                        const entry = entryMap.get(ds);
+                        if (!entry || !entry.sleepTime) return; // not submitted yet — skip
+                    }
+                    totalDays++;
+                    const entry = entryMap.get(ds);
+                    if (entry && entry.sleepTime && entry.sleepTime !== 'NR') {
+                        totalScore += (entry.totalScore ?? 0) + (entry.bonusTotal || 0);
+                        svcMinsWeek += entry.serviceMinutes || 0;
+                        filledDays++;
+                    } else {
+                        totalScore += -30; // NR penalty
+                    }
+                });
+                totalScore += calcServiceWeekly(svcMinsWeek, u.level || 'Level-1');
+                if (totalDays === 0) return;
+                const pct = Math.round(totalScore * 100 / (totalDays * dailyMax + 25));
+                rows.push({ uid: uDoc.id, name: u.name||'—', photo: u.photoURL||null, level: u.level||'L1', dept: u.department||'', team: u.team||'', score: totalScore, pct, days: filledDays + '/' + dates.length, rejected: false });
+            });
+        }
+
+        rows.sort((a,b) => b.score - a.score);
+
+        // Podium
+        if (podiumEl && rows.length >= 2) {
+            const top = rows.slice(0, Math.min(3, rows.length));
+            const order = top.length === 2 ? [top[1], top[0]] : [top[1], top[0], top[2]];
+            const delays = top.length === 2 ? [0.4, 1.2] : [1.0, 1.6, 0.4];
+            const sizes = [74, 96, 62];
+            const borders = ['#94a3b8', '#fbbf24', '#cd7f32'];
+            const topMargins = ['28px', '0px', '48px'];
+            podiumEl.innerHTML = order.map((r, i) => {
+                const rank = top.indexOf(r);
+                const medal = MEDALS[rank];
+                const sz = sizes[i] || 54;
+                const borderColor = borders[i] || '#e5e7eb';
+                const confetti = rank === 0 ? `<span style="position:absolute;top:-10px;font-size:24px;animation:confettiBurst 1.2s ease ${delays[i]+0.4}s both;">🎉</span>` : '';
+                return `<div style="display:flex;flex-direction:column;align-items:center;gap:5px;min-width:86px;position:relative;margin-top:${topMargins[i]};animation:podiumRise 0.6s cubic-bezier(0.34,1.56,0.64,1) ${delays[i]}s both;">
+                    ${confetti}
+                    <div class="av" style="width:${sz}px;height:${sz}px;border:3px solid ${borderColor};">${r.photo ? `<img src="${r.photo}">` : `<span class="av-init" style="font-size:${Math.round(sz*0.38)}px;">${(r.name||'?').split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase()}</span>`}</div>
+                    <span style="font-size:22px;">${medal}</span>
+                    <span style="font-size:12px;font-weight:700;color:#1A3C5E;text-align:center;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.name}</span>
+                    <span style="font-size:13px;font-weight:800;color:${r.pct>=70?'#16a34a':'#d97706'};">${r.score} pts</span>
+                </div>`;
+            }).join('');
+        } else if (podiumEl) { podiumEl.innerHTML = ''; }
+
+        // List
+        window._adminCmpUserList = rows.map(r => ({ uid: r.uid, name: r.name, level: r.level, chanting: '', rounds: '?', role: 'user', dept: r.dept, team: r.team }));
+        container.innerHTML = rows.length === 0
+            ? '<p style="color:#aaa;text-align:center;padding:20px;">No entries for this period.</p>'
+            : rows.map((r, i) => {
+                const medal = i < 3 ? MEDALS[i] : `<span style="font-size:13px;font-weight:700;color:#9ca3af;">#${i+1}</span>`;
+                const scoreColor = r.pct >= 70 ? '#15803d' : r.pct >= 50 ? '#d97706' : '#dc2626';
+                const subLine = r.isNR ? 'NR' : r.rejected ? 'Rejected' : (r.days ? `${r.pct}% · ${r.days}d` : `${r.pct}%`);
+                return `<div class="lb-row" data-dept="${r.dept}" data-level="${r.level}" data-team="${r.team}" onclick="openAdminCmpUser(${i})" style="cursor:pointer;animation-delay:${Math.min(i*0.03,0.18)}s;${r.isNR?'opacity:0.6;':''}">
+                    <div class="lb-rank">${medal}</div>
+                    ${avatarHtml(r.photo, r.name, 34)}
+                    <div class="lb-name">${r.name}<span style="font-size:10px;color:#9ca3af;margin-left:5px;">${r.level} · ${r.dept}</span></div>
+                    <div class="lb-score-wrap">
+                        <div class="lb-score" style="color:${scoreColor};">${r.rejected?'🚫':r.score}</div>
+                        <div class="lb-pct">${subLine}</div>
+                    </div>
+                </div>`;
+            }).join('');
+
+    } catch(err) { console.error('Admin Leaderboard error:', err); container.innerHTML = '<p style="color:#dc2626;text-align:center;">Error loading.</p>'; }
+    _adminLbLoading = false;
+}
+
+// ═══════════════════════════════════════════════════════════
+// SA HOME DASHBOARD
+// ═══════════════════════════════════════════════════════════
+let _saHomeLoaded = false;
+async function loadSAHome() {
+    if (_saHomeLoaded) return;
+    _saHomeLoaded = true;
+    try { await _doLoadSAHome(); } catch(e) { console.error('SA Home error:', e); _saHomeLoaded = false; }
+}
+async function _doLoadSAHome() {
+        const usersSnap = await db.collection('users').get();
+        const allUsers = usersSnap.docs.filter(d => {
+            const u = d.data();
+            if (u.role === 'superAdmin' || u.role === 'deptAdmin' || u.role === 'overallTeamLeader' || u.role === 'teamLeader' || u.role === 'admin') return false;
+            return matchesScope(u) && u.name;
+        }).sort((a,b) => (a.data().name||'').localeCompare(b.data().name||''));
+
+        document.getElementById('sa-total-users').textContent = allUsers.length;
+
+        // Build dept pills with counts
+        const deptCounts = { IGF:0, IYF:0, ICF_MTG:0, ICF_PRJI:0 };
+        allUsers.forEach(d => { const dept = d.data().department; if (deptCounts[dept] !== undefined) deptCounts[dept]++; });
+        const pillsEl = document.getElementById('sa-home-dept-pills');
+        if (pillsEl) {
+            let pillsHtml = `<button class="chart-tab-btn active" onclick="filterSAHomeTable('',this)" style="font-size:11px;padding:5px 12px;">All</button>`;
+            Object.entries(deptCounts).forEach(([dept, cnt]) => {
+                pillsHtml += `<button class="chart-tab-btn" onclick="filterSAHomeTable('${dept}',this)" style="font-size:11px;padding:5px 12px;">${dept} (${cnt})</button>`;
+            });
+            pillsEl.innerHTML = pillsHtml;
+        }
+
+        // Store for fill table rendering
+        window._saHomeAllUsers = allUsers;
+        renderSAFillTable(0);
+}
+
+let _saHomeWeekOffset = 0;
+window.switchSAHomeWeek = (offset, btn) => {
+    _saHomeWeekOffset = offset;
+    document.querySelectorAll('#sa-home-week-tabs .chart-tab-btn').forEach((b,i) => b.classList.toggle('active', i === offset));
+    renderSAFillTable(offset);
+};
+
+window.filterSAHomeTable = (dept, btn) => {
+    document.querySelectorAll('#sa-home-dept-pills .chart-tab-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    const rows = document.querySelectorAll('#sa-fill-table .sa-fill-row');
+    rows.forEach(r => {
+        r.style.display = (!dept || r.dataset.dept === dept) ? '' : 'none';
+    });
+};
+
+async function renderSAFillTable(weekOffset) {
+    const tableEl = document.getElementById('sa-fill-table');
+    if (!tableEl) return;
+    const allUsers = window._saHomeAllUsers;
+    if (!allUsers || allUsers.length === 0) { tableEl.innerHTML = '<p style="color:#aaa;font-size:12px;text-align:center;">No data.</p>'; return; }
+
+    tableEl.innerHTML = '<p style="color:#aaa;text-align:center;padding:20px;">Loading…</p>';
+
+    const { dates } = getWeekDates(weekOffset);
+    const todayStr = localDateStr(0);
+    const startStr = dates[0], endStr = dates[dates.length-1];
+
+    // Fetch sadhana for all users in the week range
+    const snaps = await Promise.all(allUsers.map(uDoc =>
+        uDoc.ref.collection('sadhana')
+            .where(firebase.firestore.FieldPath.documentId(), '>=', startStr)
+            .where(firebase.firestore.FieldPath.documentId(), '<=', endStr).get()
+    ));
+
+    const rows = [];
+    allUsers.forEach((uDoc, idx) => {
+        const u = uDoc.data();
+        const snap = snaps[idx];
+        const entrySet = new Set();
+        if (snap) snap.docs.forEach(d => { if (d.data().sleepTime && d.data().sleepTime !== 'NR') entrySet.add(d.id); });
+
+        let filled = 0, missed = 0, totalDays = 0;
+        const joinedDate = u.joinedDate || APP_START;
+        dates.forEach(ds => {
+            if (ds < APP_START || ds < joinedDate || ds > todayStr) return;
+            if (ds === todayStr && !entrySet.has(ds)) return; // today not filled yet — don't penalize
+            totalDays++;
+            if (entrySet.has(ds)) filled++; else missed++;
+        });
+
+        const dailyMax = getDailyMax(u.level || 'Level-1');
+        let totalScore = 0, svcMinsWeek = 0;
+        if (snap) snap.docs.forEach(d => { const dd = d.data(); if (dd.sleepTime && dd.sleepTime !== 'NR') { totalScore += (dd.totalScore||0) + (dd.bonusTotal||0); svcMinsWeek += (dd.serviceMinutes||0); } });
+        totalScore += calcServiceWeekly(svcMinsWeek, u.level||'Level-1');
+        totalScore += missed * -30;
+        const pct = totalDays > 0 ? Math.round(totalScore * 100 / (totalDays * dailyMax + 25)) : 0;
+
+        rows.push({ uid: uDoc.id, name: u.name, dept: u.department||'-', team: u.team||'-', level: u.level||'L1', chanting: u.chantingCategory||'', rounds: u.exactRounds||'?', filled, missed, totalDays, pct });
+    });
+
+    rows.sort((a,b) => b.pct - a.pct);
+
+    // Store for UAC clicks
+    window._saFillUserList = rows;
+
+    const pctColor = p => p >= 70 ? '#16a34a' : p >= 50 ? '#d97706' : '#dc2626';
+    tableEl.innerHTML = `<table class="data-table" style="font-size:12px;width:100%;">
+        <thead><tr>
+            <th style="text-align:left;position:sticky;left:0;background:#f8f9fa;z-index:4;box-shadow:2px 0 4px rgba(0,0,0,0.06);">Devotee</th>
+            <th>Dept</th><th>Filled</th><th>Missed</th><th>%</th>
+        </tr></thead>
+        <tbody>${rows.map((r, i) => `<tr class="sa-fill-row" data-dept="${r.dept}">
+            <td style="text-align:left;font-weight:600;position:sticky;left:0;background:white;z-index:2;box-shadow:2px 0 4px rgba(0,0,0,0.06);cursor:pointer;color:#1A3C5E;" onclick="openSAFillUser(${i})">${r.name}</td>
+            <td style="font-size:11px;color:#6b7280;">${r.dept}</td>
+            <td style="color:#16a34a;font-weight:600;">📋 ${r.filled}/${r.totalDays}</td>
+            <td style="color:${r.missed>0?'#dc2626':'#6b7280'};font-weight:${r.missed>0?'700':'400'};">${r.missed>0?'✕ '+r.missed:'—'}</td>
+            <td style="color:${pctColor(r.pct)};font-weight:700;">${r.pct}%</td>
+        </tr>`).join('')}</tbody></table>`;
+}
+
+window.openSAFillUser = (idx) => {
+    const r = (window._saFillUserList || [])[idx];
+    if (!r) return;
+    openUAC(r.uid, r.name, r.level, r.chanting, r.rounds, 'user', r.dept, r.team);
+};
+
+// ═══════════════════════════════════════════════════════════
+// SA TASKS VIEW
+// ═══════════════════════════════════════════════════════════
+async function loadSATasks() {
+    const container = document.getElementById('sa-tasks-container');
+    if (!container) return;
+    container.innerHTML = '<p style="color:#aaa;text-align:center;padding:20px;">Loading…</p>';
+    try {
+        const [taskSnap, usersSnap] = await Promise.all([
+            db.collection('tasks').orderBy('createdAt','desc').limit(20).get(),
+            db.collection('users').get()
+        ]);
+        if (taskSnap.empty) { container.innerHTML = '<p style="color:#aaa;text-align:center;padding:20px;">No tasks yet. Create one!</p>'; return; }
+
+        const userMap = {};
+        usersSnap.docs.forEach(d => { const u = d.data(); if (u.name) userMap[d.id] = u; });
+
+        container.innerHTML = taskSnap.docs.map(d => {
+            const t = d.data();
+            const completedBy = t.completedBy || [];
+            // Count target users
+            const targetUsers = Object.entries(userMap).filter(([uid, u]) => {
+                if (u.role === 'superAdmin' || u.role === 'deptAdmin' || u.role === 'overallTeamLeader' || u.role === 'teamLeader' || u.role === 'admin') return false;
+                return t.targetDept === 'all' || u.department === t.targetDept;
+            });
+            const done = targetUsers.filter(([uid]) => completedBy.includes(uid)).length;
+            const total = targetUsers.length;
+            const pct = total > 0 ? Math.round(done * 100 / total) : 0;
+            const pctColor = pct >= 70 ? '#16a34a' : pct >= 40 ? '#d97706' : '#dc2626';
+            const target = t.targetDept === 'all' ? 'All Depts' : t.targetDept;
+
+            return `<div class="card" style="padding:14px;margin-bottom:10px;">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                    <div style="flex:1;">
+                        <div style="font-size:14px;font-weight:700;color:#1A3C5E;">${t.title||'Untitled'}</div>
+                        <div style="font-size:12px;color:#555;margin-top:4px;white-space:pre-wrap;">${t.body||''}</div>
+                        ${t.attachmentUrl ? `<a href="${t.attachmentUrl}" target="_blank" style="font-size:12px;color:#3498db;">🔗 Attachment</a>` : ''}
+                        <div style="font-size:10px;color:#9ca3af;margin-top:6px;">📌 ${target} · by ${t.createdBy||'Admin'}</div>
+                    </div>
+                    ${isSuperAdmin() ? `<button onclick="deleteTask('${d.id}')" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:16px;padding:4px;margin:0;width:auto;">🗑️</button>` : ''}
+                </div>
+                <div style="margin-top:10px;display:flex;align-items:center;gap:8px;">
+                    <div class="home-act-bar" style="flex:1;"><div class="home-act-fill" style="width:${pct}%;background:${pctColor};"></div></div>
+                    <span style="font-size:12px;font-weight:700;color:${pctColor};">${done}/${total} (${pct}%)</span>
+                </div>
+            </div>`;
+        }).join('');
+    } catch(e) { console.error('SA Tasks error:', e); container.innerHTML = '<p style="color:#dc2626;text-align:center;">Error loading tasks.</p>'; }
+}
+
+// ═══════════════════════════════════════════════════════════
+// TASKS & ANNOUNCEMENTS (User view)
+// ═══════════════════════════════════════════════════════════
+async function loadTasks() {
+    const container = document.getElementById('tasks-container');
+    if (!container) return;
+    try {
+        const snap = await db.collection('tasks').orderBy('createdAt','desc').limit(10).get();
+        if (snap.empty) { container.innerHTML = '<p style="color:#aaa;font-size:12px;text-align:center;">No tasks yet.</p>'; updateTasksBadge(0); return; }
+        const myDept = userProfile?.department || '';
+        const myTasks = snap.docs.filter(d => {
+            const t = d.data();
+            return t.targetDept === 'all' || t.targetDept === myDept;
+        });
+        const pendingCount = myTasks.filter(d => !(d.data().completedBy||[]).includes(currentUser?.uid)).length;
+        updateTasksBadge(pendingCount);
+        const cards = myTasks.map(d => buildTaskCard(d.id, d.data(), false));
+        container.innerHTML = cards.length ? cards.join('') : '<p style="color:#aaa;font-size:12px;text-align:center;">No tasks for your department.</p>';
+    } catch(e) {
+        console.warn('Tasks load error:', e);
+        if (container) container.innerHTML = '<p style="color:#aaa;font-size:12px;text-align:center;">No tasks yet.</p>';
+        updateTasksBadge(0);
+    }
+}
+
+function updateTasksBadge(count) {
+    const badge = document.getElementById('header-tasks-badge');
+    if (!badge) return;
+    if (count > 0) { badge.textContent = count; badge.classList.remove('hidden'); }
+    else { badge.classList.add('hidden'); }
+}
+
+function buildTaskCard(id, t, showAdmin) {
+    const done = (t.completedBy || []).includes(currentUser?.uid);
+    const doneStyle = done ? 'opacity:0.6;' : '';
+    const urlLink = t.attachmentUrl ? `<a href="${t.attachmentUrl}" target="_blank" style="font-size:12px;color:#3498db;display:block;margin-top:4px;">🔗 ${t.attachmentUrl.length > 40 ? t.attachmentUrl.substring(0,40)+'...' : t.attachmentUrl}</a>` : '';
+    const fileLink = t.attachmentData && t.attachmentName ? `<a href="${t.attachmentData}" download="${t.attachmentName}" style="font-size:12px;color:#3498db;display:inline-flex;align-items:center;gap:4px;margin-top:6px;background:#f0f7ff;padding:4px 10px;border-radius:6px;text-decoration:none;">📎 ${t.attachmentName}</a>` : '';
+    const doneBtn = !isAnyAdmin() && !done ? `<button onclick="markTaskDone('${id}')" class="btn-success btn-sm" style="margin-top:8px;">✅ Mark Done</button>` : '';
+    const doneLbl = done ? '<span style="color:#16a34a;font-size:12px;font-weight:600;">✅ Completed</span>' : '';
+    const delBtn = showAdmin && isSuperAdmin() ? `<button onclick="deleteTask('${id}')" class="btn-danger btn-sm" style="margin-top:6px;">🗑️ Delete</button>` : '';
+    const target = t.targetDept === 'all' ? 'All Depts' : t.targetDept;
+    return `<div class="card" style="padding:14px;margin-bottom:10px;${doneStyle}">
+        <div style="font-size:14px;font-weight:700;color:#1A3C5E;">${t.title||'Untitled'}</div>
+        <div style="font-size:12px;color:#555;margin-top:4px;white-space:pre-wrap;">${t.body||''}</div>
+        ${urlLink}${fileLink}
+        <div style="font-size:10px;color:#9ca3af;margin-top:6px;">📌 ${target} · by ${t.createdBy||'Admin'} · ${(t.createdAt?.toDate?.() || new Date()).toLocaleDateString()}</div>
+        ${doneLbl}${doneBtn}${delBtn}
+    </div>`;
+}
+
+window.markTaskDone = async (taskId) => {
+    try {
+        await db.collection('tasks').doc(taskId).update({ completedBy: firebase.firestore.FieldValue.arrayUnion(currentUser.uid) });
+        showToast('✅ Task marked done!', 'success');
+        loadTasks();
+    } catch(e) { showToast('Error: ' + e.message, 'error'); }
+};
+
+let _taskFileData = null, _taskFileName = null;
+
+window.handleTaskFileSelect = (input) => {
+    const file = input.files[0];
+    if (!file) { _taskFileData = null; _taskFileName = null; return; }
+    if (file.size > 5 * 1024 * 1024) { showToast('File too large (max 5MB)', 'warn'); input.value = ''; return; }
+    _taskFileName = file.name;
+    document.getElementById('task-file-name').textContent = file.name;
+    const reader = new FileReader();
+    reader.onload = (e) => { _taskFileData = e.target.result; };
+    reader.readAsDataURL(file);
+};
+
+window.openTaskModal = () => {
+    if (!isAnyAdmin()) return;
+    document.getElementById('task-title').value = '';
+    document.getElementById('task-body').value = '';
+    document.getElementById('task-url').value = '';
+    document.getElementById('task-file-input').value = '';
+    document.getElementById('task-file-name').textContent = '';
+    _taskFileData = null; _taskFileName = null;
+    document.getElementById('task-target-dept').value = isDeptAdmin() ? userProfile.department : 'all';
+    document.getElementById('task-create-modal').classList.remove('hidden');
+};
+window.closeTaskModal = () => { document.getElementById('task-create-modal').classList.add('hidden'); };
+
+window.submitTask = async () => {
+    const title = document.getElementById('task-title').value.trim();
+    const body  = document.getElementById('task-body').value.trim();
+    const url   = document.getElementById('task-url').value.trim();
+    const dept  = document.getElementById('task-target-dept').value;
+    if (!title) { showToast('Title required', 'warn'); return; }
+    try {
+        const taskData = {
+            title, body, attachmentUrl: url, targetDept: dept,
+            createdBy: userProfile.name, createdByUid: currentUser.uid,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            completedBy: []
+        };
+        if (_taskFileData && _taskFileName) {
+            taskData.attachmentData = _taskFileData;
+            taskData.attachmentName = _taskFileName;
+        }
+        await db.collection('tasks').add(taskData);
+        showToast('✅ Task posted!', 'success');
+        _taskFileData = null; _taskFileName = null;
+        closeTaskModal();
+        loadTasks();
+    } catch(e) { showToast('Error: ' + e.message, 'error'); }
+};
+
+window.deleteTask = async (taskId) => {
+    if (!isSuperAdmin()) return;
+    if (!confirm('Delete this task?')) return;
+    try {
+        await db.collection('tasks').doc(taskId).delete();
+        showToast('Task deleted.', 'success');
+        loadTasks();
+    } catch(e) { showToast('Error: ' + e.message, 'error'); }
+};
+
+// ═══════════════════════════════════════════════════════════
+// REJECT MODAL (replaces inline prompt)
+// ═══════════════════════════════════════════════════════════
+let _rejectState = null;
+
+window.openRejectModal = async (userId, dateStr, isRevoke) => {
+    try {
+        const docSnap = await db.collection('users').doc(userId).collection('sadhana').doc(dateStr).get();
+        if (!docSnap.exists) { showToast('Entry not found', 'error'); return; }
+        const d = docSnap.data();
+        const uSnap = await db.collection('users').doc(userId).get();
+        const uData = uSnap.exists ? uSnap.data() : {};
+        const dailyMax = getDailyMax(uData.level || 'Level-1');
+
+        _rejectState = { userId, dateStr, isRevoke, data: d };
+        const titleEl = document.getElementById('reject-modal-title');
+        const bodyEl  = document.getElementById('reject-modal-body');
+        const btnEl   = document.getElementById('reject-confirm-btn');
+
+        if (isRevoke) {
+            titleEl.textContent = `✅ Restore Entry — ${dateStr}`;
+            bodyEl.innerHTML = `Current: <strong style="color:#dc2626;">-50 (rejected)</strong><br>Will restore to: <strong style="color:#16a34a;">${d.originalTotalScore??0} pts</strong>`;
+            btnEl.textContent = 'Restore';
+            btnEl.className = 'btn-success';
+            btnEl.style.flex = '1';
+        } else {
+            titleEl.textContent = `🚫 Reject Entry — ${dateStr}`;
+            bodyEl.innerHTML = `Current score: <strong>${d.totalScore??0}</strong> / ${dailyMax}<br>Will be replaced with: <strong style="color:#dc2626;">-50 penalty</strong>`;
+            btnEl.textContent = 'Reject';
+            btnEl.className = 'btn-danger';
+            btnEl.style.flex = '1';
+        }
+        document.getElementById('reject-remarks').value = '';
+        document.getElementById('reject-modal').classList.remove('hidden');
+    } catch(e) { showToast('Error: ' + e.message, 'error'); }
+};
+
+window.closeRejectModal = () => {
+    document.getElementById('reject-modal').classList.add('hidden');
+    _rejectState = null;
+};
+
+window.submitRejectAction = async () => {
+    if (!_rejectState) return;
+    const { userId, dateStr, isRevoke, data } = _rejectState;
+    const remarks = document.getElementById('reject-remarks').value.trim();
+    if (!remarks) { showToast('Remarks required', 'warn'); return; }
+
+    try {
+        const ref = db.collection('users').doc(userId).collection('sadhana').doc(dateStr);
+        if (isRevoke) {
+            await ref.update({
+                rejected: false,
+                totalScore: data.originalTotalScore ?? data.totalScore,
+                dayPercent: data.originalDayPercent ?? data.dayPercent,
+                bonusTotal: data.originalBonusTotal ?? data.bonusTotal ?? 0,
+                revokedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                revokedBy: userProfile.name,
+                revocationReason: remarks
+            });
+            showToast('✅ Entry restored!', 'success');
+        } else {
+            await ref.update({
+                rejected: true,
+                rejectedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                rejectedBy: userProfile.name,
+                rejectionReason: remarks,
+                originalTotalScore: data.totalScore ?? 0,
+                originalDayPercent: data.dayPercent ?? 0,
+                originalBonusTotal: data.bonusTotal ?? 0,
+                totalScore: -50,
+                dayPercent: -31,
+                bonusTotal: 0
+            });
+            showToast('🚫 Entry rejected with -50 penalty!', 'success');
+        }
+        closeRejectModal();
+        adminPanelLoaded = false;
+        _userWCRLoaded = false;
+        loadAdminPanel();
+    } catch(e) { showToast('Error: ' + e.message, 'error'); }
+};
+
+// ═══════════════════════════════════════════════════════════
+// BEST/WEAK PERFORMERS
+// ═══════════════════════════════════════════════════════════
+let _perfAllData = [], _perfTab = 'weekly', _perfYear = null, _perfMonth = null, _perfWeekIdx = 0;
+
+function computePerformers(filteredDocs, sadhanaCache) {
+    _perfAllData = filteredDocs.map((uDoc) => {
+        const u = uDoc.data();
+        const ents = sadhanaCache.get(uDoc.id) || [];
+        const _entsMap = new Map(); ents.forEach(e => _entsMap.set(e.date, e));
+        return { id: uDoc.id, name: u.name||'', level: u.level||'Level-1', ents, _entsMap, joinedDate: u.joinedDate||APP_START };
+    });
+    initPerfDropdowns();
+    renderPerformers();
+}
+
+// Read perf selector value from whichever panel is currently active
+function _perfRead(baseId) {
+    const isAdmin = document.getElementById('admin-panel')?.classList.contains('active');
+    const primaryId = isAdmin ? 'sa-' + baseId : baseId;
+    const fallbackId = isAdmin ? baseId : 'sa-' + baseId;
+    const val = document.getElementById(primaryId)?.value ?? document.getElementById(fallbackId)?.value ?? null;
+    return val;
+}
+
+// Sync a value to both perf selectors
+function _perfSync(baseId, val) {
+    [baseId, 'sa-' + baseId].forEach(id => { const el = document.getElementById(id); if (el) el.value = String(val); });
+}
+
+function initPerfDropdowns() {
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMon = now.getMonth();
+    const startYear = parseInt(APP_START.substring(0,4));
+
+    let yearOpts = '';
+    for (let y = curYear; y >= startYear; y--) yearOpts += `<option value="${y}">${y}</option>`;
+    ['perf-year-sel','sa-perf-year-sel'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) { el.innerHTML = yearOpts; el.value = String(curYear); }
+    });
+    _perfYear = curYear;
+    _perfMonth = curMon;
+    populateMonthDropdown();
+    populateWeekDropdown();
+}
+
+function populateMonthDropdown() {
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const now = new Date();
+    const curYear = now.getFullYear(), curMon = now.getMonth();
+    const startYear = parseInt(APP_START.substring(0,4)), startMon = parseInt(APP_START.substring(5,7)) - 1;
+    const fromMon = _perfYear === startYear ? startMon : 0;
+    const toMon = _perfYear === curYear ? curMon : 11;
+    // Clamp _perfMonth to valid range for the selected year
+    _perfMonth = Math.min(toMon, Math.max(fromMon, _perfMonth));
+    let opts = '';
+    for (let m = toMon; m >= fromMon; m--) opts += `<option value="${m}">${months[m]}</option>`;
+    ['perf-month-sel','sa-perf-month-sel'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) { el.innerHTML = opts; el.value = String(_perfMonth); }
+    });
+    // _perfMonth already set above — no re-read needed
+}
+
+function populateWeekDropdown() {
+    const monthStart = new Date(_perfYear, _perfMonth, 1);
+    const monthEnd = new Date(_perfYear, _perfMonth + 1, 0);
+    const weeks = getWeeksInMonth(monthStart, monthEnd);
+    const fmt = d => `${String(d.getDate()).padStart(2,'0')} ${d.toLocaleString('en-GB',{month:'short'})}`;
+    let opts = '';
+    weeks.forEach((sunStr, i) => {
+        const [y,m,d] = sunStr.split('-').map(Number);
+        const sun = new Date(y, m-1, d);
+        const sat = new Date(y, m-1, d+6);
+        opts += `<option value="${i}">${fmt(sun)} – ${fmt(sat)}</option>`;
+    });
+    // Default to the week that contains today; for past months default to last week
+    const todayDs = localDateStr(0);
+    let defaultIdx = weeks.length - 1;
+    for (let i = 0; i < weeks.length; i++) {
+        const [wy,wm,wd] = weeks[i].split('-').map(Number);
+        const sat = new Date(wy, wm-1, wd+6);
+        const satDs = toLocalDS(sat);
+        if (satDs >= todayDs) { defaultIdx = i; break; } // first week whose end >= today
+    }
+    // Clamp to last valid week if all weeks are in the future (shouldn't happen)
+    defaultIdx = Math.max(0, Math.min(defaultIdx, weeks.length - 1));
+    ['perf-week-sel','sa-perf-week-sel'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) { el.innerHTML = opts; el.value = String(defaultIdx); el.style.display = _perfTab === 'weekly' ? '' : 'none'; }
+    });
+    _perfWeekIdx = defaultIdx;
+}
+
+function getWeeksInMonth(monthStart, monthEnd) {
+    const weeks = [];
+    const firstSun = new Date(monthStart);
+    firstSun.setDate(firstSun.getDate() - firstSun.getDay());
+    let cur = new Date(firstSun);
+    const toLocal = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    while (cur <= monthEnd) {
+        weeks.push(toLocal(cur));
+        cur.setDate(cur.getDate() + 7);
+    }
+    return weeks;
+}
+
+window.onPerfYearChange = () => {
+    const raw = _perfRead('perf-year-sel');
+    if (raw == null) return;
+    _perfYear = parseInt(raw);
+    _perfSync('perf-year-sel', _perfYear);
+    populateMonthDropdown();
+    populateWeekDropdown();
+    renderPerformers();
+};
+
+window.onPerfMonthChange = () => {
+    const raw = _perfRead('perf-month-sel');
+    if (raw == null) return;
+    _perfMonth = parseInt(raw);
+    _perfSync('perf-month-sel', _perfMonth);
+    populateWeekDropdown();
+    renderPerformers();
+};
+
+window.onPerfWeekChange = () => {
+    const raw = _perfRead('perf-week-sel');
+    if (raw == null) return;
+    _perfWeekIdx = parseInt(raw);
+    _perfSync('perf-week-sel', _perfWeekIdx);
+    renderPerformers();
+};
+
+window.setPerfTab = (tab, btn) => {
+    _perfTab = tab;
+    document.querySelectorAll('.perf-tab-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    // Also sync the other panel's buttons
+    document.querySelectorAll('.perf-tab-btn').forEach(b => {
+        if (b.textContent.trim().toLowerCase() === tab) b.classList.add('active');
+    });
+    ['perf-week-sel','sa-perf-week-sel'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = tab === 'weekly' ? '' : 'none';
+    });
+    renderPerformers();
+};
+
+function renderPerformers() {
+    if (_perfAllData.length < 2) {
+        ['perf-charts','admin-perf-charts'].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = ''; });
+        highlightWCRColumn(null);
+        return;
+    }
+
+    const monthStart = new Date(_perfYear, _perfMonth, 1);
+    const monthEnd = new Date(_perfYear, _perfMonth + 1, 0);
+    const weeks = getWeeksInMonth(monthStart, monthEnd);
+    const todayStr = localDateStr(0);
+
+    const results = _perfAllData.map(u => {
+        let pct = 0;
+        if (_perfTab === 'weekly') {
+            // Single week
+            const weekSun = weeks[Math.min(_perfWeekIdx, weeks.length-1)] || weeks[0];
+            let tot = 0, svcMinsWeek = 0;
+            const weekEnts = [];
+            const [pwy,pwm,pwd] = weekSun.split('-').map(Number);
+            for (let i = 0; i < 7; i++) {
+                const d = new Date(pwy,pwm-1,pwd+i);
+                const ds = toLocalDS(d);
+                if (ds < APP_START || ds > todayStr) continue;
+                const e = u._entsMap ? u._entsMap.get(ds) : u.ents.find(en => en.date === ds);
+                if (e) { tot += (e.score||0) + (e.bonus||0); svcMinsWeek += (e.svcMins||0); weekEnts.push({ id: ds }); }
+                else if (ds < todayStr) { tot += -30; }
+                // today not submitted — skip (matches WCR behavior)
+            }
+            tot += calcServiceWeekly(svcMinsWeek, u.level);
+            const fd = fairDenominator(weekSun, weekEnts, u.level);
+            pct = Math.round(tot * 100 / fd);
+        } else {
+            // Monthly — average of all weeks
+            let sum = 0, count = 0;
+            weeks.forEach(weekSun => {
+                let tot = 0, svcMinsWeek = 0, eligibleDays = 0;
+                const weekEnts = [];
+                const [mwy,mwm,mwd] = weekSun.split('-').map(Number);
+                for (let i = 0; i < 7; i++) {
+                    const d = new Date(mwy,mwm-1,mwd+i);
+                    const ds = toLocalDS(d);
+                    if (ds < APP_START || ds > todayStr) continue;
+                    eligibleDays++;
+                    const e = u._entsMap ? u._entsMap.get(ds) : u.ents.find(en => en.date === ds);
+                    if (e) { tot += (e.score||0) + (e.bonus||0); svcMinsWeek += (e.svcMins||0); weekEnts.push({ id: ds }); }
+                    else if (ds < todayStr) { tot += -30; }
+                    // today not submitted — skip (matches WCR behavior)
+                }
+                tot += calcServiceWeekly(svcMinsWeek, u.level);
+                const fd = fairDenominator(weekSun, weekEnts, u.level);
+                const weekPct = Math.round(tot * 100 / fd);
+                if (eligibleDays > 0) { sum += weekPct; count++; }
+            });
+            pct = count > 0 ? Math.round(sum / count) : 0;
+        }
+        return { name: u.name, pct, level: u.level };
+    });
+
+    results.sort((a,b) => b.pct - a.pct);
+    const best = results.slice(0, 3);
+    const weak = results.slice(-3).reverse();
+
+    // SVG ring chart builder
+    function svgRing(items, colors, centerPct, centerColor, centerLabel) {
+        const radii = [68, 50, 32];
+        const sw = 13;
+        let arcs = '';
+        items.forEach((r, i) => {
+            if (i >= 3) return;
+            const rd = radii[i];
+            const circ = 2 * Math.PI * rd;
+            const pctClamped = Math.max(0, Math.min(r.pct, 100));
+            const dashLen = (pctClamped / 100) * circ;
+            arcs += `<circle cx="80" cy="80" r="${rd}" fill="none" stroke="#e5e7eb" stroke-width="${sw}" />`;
+            arcs += `<circle cx="80" cy="80" r="${rd}" fill="none" stroke="${colors[i]}" stroke-width="${sw}" stroke-linecap="round" stroke-dasharray="${dashLen} ${circ}" transform="rotate(-90 80 80)" style="transition:stroke-dasharray 0.8s ease;" />`;
+        });
+        return `<svg viewBox="0 0 160 160" style="width:140px;height:140px;">
+            ${arcs}
+            <text x="80" y="74" text-anchor="middle" font-size="20" font-weight="800" fill="${centerColor}">${centerPct}%</text>
+            <text x="80" y="92" text-anchor="middle" font-size="9" fill="#6b7280">${centerLabel}</text>
+        </svg>`;
+    }
+
+    const legendHtml = (items, colors) => items.map((r, i) => `<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
+        <div style="width:8px;height:8px;border-radius:50%;background:${colors[i]||'#888'};flex-shrink:0;"></div>
+        <span style="font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.name}</span>
+        <span style="font-size:12px;font-weight:700;color:${colors[i]||'#888'};">${r.pct}%</span>
+    </div>`).join('');
+
+    const bestColors = ['#3b82f6','#60a5fa','#93c5fd'];
+    const weakColors = ['#ef4444','#f97316','#fbbf24'];
+
+    const html = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="card" style="padding:12px;text-align:center;">
+            <div style="font-size:12px;font-weight:700;color:#1d4ed8;margin-bottom:8px;">🏆 Top Performers</div>
+            ${svgRing(best, bestColors, best[0]?.pct||0, '#3b82f6', 'top score')}
+            <div style="text-align:left;margin-top:8px;">${legendHtml(best, bestColors)}</div>
+        </div>
+        <div class="card" style="padding:12px;text-align:center;">
+            <div style="font-size:12px;font-weight:700;color:#dc2626;margin-bottom:8px;">🔻 Needs Attention</div>
+            ${svgRing(weak, weakColors, weak[0]?.pct||0, '#ef4444', 'lowest')}
+            <div style="text-align:left;margin-top:8px;">${legendHtml(weak, weakColors)}</div>
+        </div>
+    </div>`;
+
+    ['perf-charts','admin-perf-charts'].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = html; });
+
+    // Highlight the selected week's column in WCR table
+    if (_perfTab === 'weekly') {
+        const selectedSun = weeks[Math.min(_perfWeekIdx, weeks.length-1)];
+        setTimeout(() => highlightWCRColumn(selectedSun), 100);
+    } else {
+        highlightWCRColumn(null);
+    }
+}
+
+function highlightWCRColumn(selectedSunStr) {
+    // Remove all existing highlights
+    document.querySelectorAll('.col-highlight').forEach(el => el.classList.remove('col-highlight'));
+    if (!selectedSunStr) return;
+
+    // Find matching column in WCR tables by header text
+    const [sy,sm,sd] = selectedSunStr.split('-').map(Number);
+    const sun = new Date(sy, sm-1, sd);
+    const fmt = d => `${String(d.getDate()).padStart(2,'0')} ${d.toLocaleString('en-GB',{month:'short'})}`;
+    const matchText = fmt(sun);
+
+    ['comp-perf-table','admin-comparative-reports-container'].forEach(containerId => {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        const table = container.querySelector?.('table') || container;
+        if (!table || !table.querySelectorAll) return;
+        const ths = table.querySelectorAll('th.comp-th, th');
+        let matchCol = -1;
+        ths.forEach((th, i) => { if (th.textContent.trim().includes(matchText)) matchCol = i; });
+        if (matchCol < 0) return;
+        if (ths[matchCol]) ths[matchCol].classList.add('col-highlight');
+        table.querySelectorAll('tbody tr').forEach(tr => {
+            const tds = tr.querySelectorAll('td');
+            if (tds[matchCol]) tds[matchCol].classList.add('col-highlight');
+        });
+    });
+}
+
+// ═══════════════════════════════════════════════════════════
+// DEPARTMENT EXCEL DOWNLOAD
+// ═══════════════════════════════════════════════════════════
+window.downloadDeptExcel = async (dept) => {
+    if (!dept || !isAnyAdmin()) return;
+    showToast('Generating ' + dept + ' report…', 'info');
+    try {
+        const usersSnap = await db.collection('users').get();
+        const deptUsers = usersSnap.docs.filter(d => {
+            const u = d.data();
+            if (u.role === 'superAdmin' || u.role === 'deptAdmin' || u.role === 'overallTeamLeader' || u.role === 'teamLeader' || u.role === 'admin') return false;
+            return u.department === dept && u.name && matchesScope(u);
+        }).sort((a,b) => (a.data().name||'').localeCompare(b.data().name||''));
+
+        if (deptUsers.length === 0) { showToast('No users found in ' + dept, 'warn'); return; }
+
+        const wb = XLSX.utils.book_new();
+        const allDeptSnaps = await Promise.all(deptUsers.map(uDoc => uDoc.ref.collection('sadhana').get()));
+        for (let di = 0; di < deptUsers.length; di++) {
+            const uDoc = deptUsers[di];
+            const u = uDoc.data();
+            const saSnap = allDeptSnaps[di];
+            const level = u.level || 'Level-1';
+            const dailyMax = getDailyMax(level);
+
+            // Group by week
+            const weekMap = {};
+            saSnap.docs.forEach(d => {
+                const wi = getWeekInfo(d.id);
+                if (!weekMap[wi.label]) weekMap[wi.label] = { sunStr: wi.sunStr, label: wi.label, data: [] };
+                weekMap[wi.label].data.push({ id: d.id, ...d.data() });
+            });
+
+            const DCOLS = 12;
+            const rows = [
+                [`${dept} — SADHANA REPORT`, ...Array(DCOLS-1).fill('')],
+                ['Name',     u.name||'',               ...Array(DCOLS-2).fill('')],
+                ['Level',    level,                    ...Array(DCOLS-2).fill('')],
+                ['Team',     u.team||'',               ...Array(DCOLS-2).fill('')],
+                ['Chanting', u.chantingCategory||'',   ...Array(DCOLS-2).fill('')],
+                ['Rounds',   u.exactRounds||'',        ...Array(DCOLS-2).fill('')],
+                Array(DCOLS).fill(''),
+                ['Date','Sleep','Wake','Chant','Read(m)','Hear(m)','Inst(m)','DaySleep(m)','Service(m)','Notes(m)','Total','%']
+            ];
+            const PROF_ROWS = 8; // rows 0-7 are profile/header block
+
+            Object.values(weekMap).sort((a,b) => b.sunStr.localeCompare(a.sunStr)).forEach(wk => {
+                rows.push([`── WEEK: ${wk.label.replace('_',' ')} ──`, ...Array(DCOLS-1).fill('')]);
+                wk.data.sort((a,b) => a.id.localeCompare(b.id)).forEach(e => {
+                    rows.push([
+                        e.id, e.sleepTime||'NR', e.wakeupTime||'NR', e.chantingTime||'NR',
+                        e.readingMinutes||0, e.hearingMinutes||0, e.instrumentMinutes||0,
+                        e.daySleepMinutes||0, e.serviceMinutes||0, e.notesMinutes||0,
+                        (e.totalScore||0)+(e.bonusTotal||0), (e.dayPercent||0)+'%'
+                    ]);
+                });
+                const wkSvcMins = wk.data.reduce((s,e) => s + (e.serviceMinutes||0), 0);
+                const wkTotal   = wk.data.reduce((s,e) => s + (e.totalScore||0) + (e.bonusTotal||0), 0) + calcServiceWeekly(wkSvcMins, level);
+                const wkFD      = wk.data.length * dailyMax + 25;
+                const wkPct     = wk.data.length ? Math.round(wkTotal*100/wkFD) : 0;
+                rows.push(['WEEK TOTAL','','','','','','','','','', wkTotal, wkPct+'%']);
+                rows.push(Array(DCOLS).fill(''));
+            });
+
+            const ws = XLSX.utils.aoa_to_sheet(rows);
+
+            // ── MERGES ───────────────────────────────────────
+            const dMerges = [{ s:{r:0,c:0}, e:{r:0,c:DCOLS-1} }]; // title
+            for (let r=1;r<=5;r++) dMerges.push({s:{r,c:1}, e:{r,c:DCOLS-1}}); // profile values
+            // Week header rows only — merge all cols (WEEK TOTAL NOT merged so score/% are visible)
+            for (let r=PROF_ROWS;r<rows.length;r++) {
+                const cell0 = String(rows[r]?.[0]||'');
+                if (cell0.startsWith('──')) dMerges.push({s:{r,c:0},e:{r,c:DCOLS-1}});
+            }
+            ws['!merges'] = dMerges;
+
+            // ── STYLES ───────────────────────────────────────
+            // Title row
+            for (let c=0;c<DCOLS;c++) styleCell(ws, `${colLetter(c)}1`, { bold:true, fill:'1A3C5E', fontColor:'FFFFFF', sz:13, align:'center' });
+
+            // Profile rows (rows 1-5 = Excel rows 2-6)
+            for (let r=1;r<=5;r++) {
+                styleCell(ws, `A${r+1}`, { bold:true, fill:'2E86C1', fontColor:'FFFFFF', align:'left' });
+                for (let c=1;c<DCOLS;c++) styleCell(ws, `${colLetter(c)}${r+1}`, { fill:'EBF3FB', align:'left' });
+            }
+            // Blank row (row 6 = Excel row 7)
+            for (let c=0;c<DCOLS;c++) styleCell(ws, `${colLetter(c)}7`, { fill:'F0F4F8' });
+
+            // Column headers (row 7 = Excel row 8)
+            for (let c=0;c<DCOLS;c++) styleCell(ws, `${colLetter(c)}8`, { bold:true, fill:'2E86C1', fontColor:'FFFFFF', sz:10, align:'center' });
+
+            // Data rows
+            let stripeToggle = 0;
+            for (let r=PROF_ROWS;r<rows.length;r++) {
+                const row    = rows[r];
+                const rNum   = r+1;
+                const isBlank = !row || row.every(v=>v==='');
+                if (isBlank) { for(let c=0;c<DCOLS;c++) styleCell(ws,`${colLetter(c)}${rNum}`,{fill:'FFFFFF'}); continue; }
+
+                const cell0  = String(row[0]||'');
+                const isWeekHdr  = cell0.startsWith('──');
+                const isWeekTot  = cell0 === 'WEEK TOTAL';
+                const isNR       = row[1] === 'NR';
+
+                if (isWeekHdr) {
+                    for(let c=0;c<DCOLS;c++) styleCell(ws,`${colLetter(c)}${rNum}`,{ bold:true, fill:'1A3C5E', fontColor:'FFFFFF', sz:11, align:'center' });
+                    stripeToggle = 0;
+                } else if (isWeekTot) {
+                    // Style all cols with blue-tint; then override total and % cols with conditional color
+                    for(let c=0;c<DCOLS;c++) styleCell(ws,`${colLetter(c)}${rNum}`,{ bold:true, fill:'D5E8F7', fontColor:'1A3C5E', sz:11, align:'center' });
+                    styleCell(ws,`A${rNum}`,{ bold:true, fill:'D5E8F7', fontColor:'1A3C5E', align:'left', sz:11 });
+                    // Total col (DCOLS-2) — bold score value
+                    styleCell(ws,`${colLetter(DCOLS-2)}${rNum}`,{ bold:true, fill:'D5E8F7', fontColor:'1A3C5E', sz:12, align:'center' });
+                    // % col (DCOLS-1) — conditional color
+                    const pctRef = `${colLetter(DCOLS-1)}${rNum}`;
+                    const pv = ws[pctRef] ? parseInt(String(ws[pctRef].v))||0 : 0;
+                    const tf = pv>=70?'C6EFCE':pv>=50?'FFEB9C':'FFC7CE';
+                    const tc = pv>=70?'006100':pv>=50?'9C5700':'C0392B';
+                    styleCell(ws,pctRef,{ bold:true, fill:tf, fontColor:tc, sz:12, align:'center' });
+                } else {
+                    // Regular data row
+                    stripeToggle++;
+                    const bg = isNR ? 'FFC7CE' : (stripeToggle%2===0?'F8FAFC':'FFFFFF');
+                    const fc = isNR ? 'C0392B' : '1A252F';
+                    styleCell(ws,`A${rNum}`,{ bold:true, fill:bg, fontColor:fc, align:'left' });
+                    for(let c=1;c<DCOLS-1;c++) styleCell(ws,`${colLetter(c)}${rNum}`,{ fill:bg, fontColor:fc, align:'center' });
+                    // % col conditional
+                    const pctRef = `${colLetter(DCOLS-1)}${rNum}`;
+                    if (ws[pctRef] && !isNR) {
+                        const pv = parseInt(ws[pctRef].v)||0;
+                        const tf = pv>=70?'C6EFCE':pv>=50?'FFEB9C':'FFC7CE';
+                        const tc = pv>=70?'006100':pv>=50?'9C5700':'C0392B';
+                        styleCell(ws,pctRef,{ bold:true, fill:tf, fontColor:tc, align:'center' });
+                    } else if (ws[pctRef]) {
+                        styleCell(ws,pctRef,{ bold:true, fill:'FFC7CE', fontColor:'C0392B', align:'center' });
+                    }
+                    // Total col — re-style as bold
+                    styleCell(ws,`${colLetter(DCOLS-2)}${rNum}`,{ bold:true, fill:bg, fontColor:fc, sz:12, align:'center' });
+                }
+            }
+
+            ws['!cols'] = [{ wch:14 }, { wch:9 }, { wch:9 }, { wch:9 }, { wch:8 }, { wch:8 }, { wch:8 }, { wch:10 }, { wch:10 }, { wch:9 }, { wch:8 }, { wch:7 }];
+            ws['!freeze'] = { xSplit:1, ySplit:PROF_ROWS, topLeftCell:`B${PROF_ROWS+1}` };
+            const sheetName = (u.name||'User').substring(0,31);
+            XLSX.utils.book_append_sheet(wb, ws, sheetName);
+        }
+
+        xlsxSave(wb, `${dept}_Sadhana_Report.xlsx`);
+        showToast('✅ Downloaded!', 'success');
+    } catch(e) { showToast('Error: ' + e.message, 'error'); console.error(e); }
 };
